@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trading Journal</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ── HEADER / TABS ──────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <span class="app-logo">📈 Trading Journal</span>
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="dashboard"  role="tab">Dashboard</button>
+      <button class="tab-btn"        data-tab="add"        role="tab">Añadir Trade</button>
+      <button class="tab-btn"        data-tab="history"    role="tab">Historial</button>
+      <button class="tab-btn"        data-tab="analytics"  role="tab">Analytics</button>
+      <button class="tab-btn"        data-tab="notes"      role="tab">Notas</button>
+    </nav>
+
+    <!-- Cloud sync controls -->
+    <div class="cloud-controls" id="cloud-controls">
+      <span id="sync-status" class="sync-badge sync-offline">Offline</span>
+      <button id="btn-cloud-login" class="btn-cloud" type="button">Sync / Login</button>
+      <div id="cloud-user-wrap" style="display:none;align-items:center;gap:8px;">
+        <span id="cloud-user-email" class="cloud-email"></span>
+        <button id="btn-cloud-logout" class="btn-cloud btn-cloud-out" type="button">Logout</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TAB 1 — DASHBOARD
+  ════════════════════════════════════════════════════════════════════════ -->
+  <section id="tab-dashboard" class="tab-section active">
+
+    <!-- Stats row -->
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-label">P&amp;L Total</div>
+        <div id="stat-pnl"   class="card-value neutral">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Win Rate</div>
+        <div id="stat-wr"    class="card-value neutral">—</div>
+        <div class="card-sub">excl. BE</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Expected Value</div>
+        <div id="stat-ev"    class="card-value neutral">—</div>
+        <div class="card-sub">excl. BE</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Total Trades</div>
+        <div id="stat-total" class="card-value neutral">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Mejor Racha</div>
+        <div id="stat-best"  class="card-value positive">0</div>
+        <div class="card-sub">TPs consecutivos</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Peor Racha</div>
+        <div id="stat-worst" class="card-value negative">0</div>
+        <div class="card-sub">SLs consecutivos</div>
+      </div>
+    </div>
+
+    <!-- Equity chart -->
+    <div class="chart-card">
+      <div class="chart-title">Curva de Equity</div>
+      <div class="chart-wrap">
+        <canvas id="chart-equity"></canvas>
+      </div>
+    </div>
+
+    <!-- Recent trades -->
+    <div class="chart-card">
+      <div class="section-header">
+        <div class="chart-title" style="margin:0">Trades Recientes</div>
+      </div>
+      <div id="recent-trades" class="recent-list">
+        <div class="empty-state"><div class="empty-state-icon">📊</div>No hay trades aún</div>
+      </div>
+    </div>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TAB 2 — AÑADIR TRADE
+  ════════════════════════════════════════════════════════════════════════ -->
+  <section id="tab-add" class="tab-section">
+    <div class="form-card">
+      <form id="trade-form" autocomplete="off">
+
+        <!-- Estrategia -->
+        <div class="form-group">
+          <label class="form-label" for="t-strategy">Nombre de Estrategia *</label>
+          <input id="t-strategy" class="form-input" type="text" name="strategyName" placeholder="p.ej. ICT BMS + FVG" required />
+        </div>
+
+        <!-- Fila: Fecha + Símbolo + Kill Zone -->
+        <div class="form-row form-row-3">
+          <div>
+            <label class="form-label" for="t-date">Fecha *</label>
+            <input id="t-date" class="form-input" type="date" name="date" required />
+          </div>
+          <div>
+            <label class="form-label" for="t-symbol">Símbolo / Par *</label>
+            <input id="t-symbol" class="form-input" type="text" name="symbol" placeholder="EURUSD" required />
+          </div>
+          <div>
+            <label class="form-label" for="t-kz">Kill Zone *</label>
+            <select id="t-kz" class="form-select" name="killZone" required>
+              <option value="">Seleccionar...</option>
+              <option value="Asia">Asia</option>
+              <option value="London">London</option>
+              <option value="New York">New York</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tipo + Resultado -->
+        <div class="form-row form-row-2">
+          <div>
+            <label class="form-label">Tipo *</label>
+            <div class="radio-group">
+              <label class="radio-label buy">
+                <input type="radio" name="side" value="BUY" checked /> BUY (Long)
+              </label>
+              <label class="radio-label sell">
+                <input type="radio" name="side" value="SELL" /> SELL (Short)
+              </label>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Resultado *</label>
+            <div class="radio-group">
+              <label class="radio-label tp">
+                <input type="radio" name="result" value="TP" checked /> TP
+              </label>
+              <label class="radio-label sl">
+                <input type="radio" name="result" value="SL" /> SL
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="result" value="BE" /> BE
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- P&L + RR -->
+        <div class="form-row form-row-2">
+          <div>
+            <label class="form-label" for="t-pnl">P&amp;L ($) *</label>
+            <input id="t-pnl" class="form-input" type="number" step="0.01" name="pnl" placeholder="100.00" required />
+          </div>
+          <div>
+            <label class="form-label" for="t-rr">RR Planificado</label>
+            <input id="t-rr" class="form-input" type="number" step="0.1" name="rrPlanned" placeholder="2.5" />
+          </div>
+        </div>
+
+        <!-- TradingView URL -->
+        <div class="form-group">
+          <label class="form-label" for="t-tv">Link TradingView</label>
+          <input id="t-tv" class="form-input" type="url" name="tradingViewUrl" placeholder="https://tradingview.com/chart/..." />
+        </div>
+
+        <!-- Imágenes -->
+        <div class="form-row form-row-2">
+          <div>
+            <label class="form-label" for="t-m3">Link Imagen M3</label>
+            <input id="t-m3" class="form-input" type="url" name="imageM3Url" placeholder="https://..." />
+          </div>
+          <div>
+            <label class="form-label" for="t-m15">Link Imagen M15</label>
+            <input id="t-m15" class="form-input" type="url" name="imageM15Url" placeholder="https://..." />
+          </div>
+        </div>
+
+        <!-- Notas -->
+        <div class="form-group">
+          <label class="form-label" for="t-notes">Notas y Observaciones</label>
+          <textarea id="t-notes" class="form-textarea" name="notes" placeholder="Escribe tu análisis, contexto del trade..."></textarea>
+        </div>
+
+        <div id="trade-form-error" class="form-error"></div>
+        <button type="submit" class="btn btn-primary">Guardar Backtest</button>
+
+      </form>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TAB 3 — HISTORIAL
+  ════════════════════════════════════════════════════════════════════════ -->
+  <section id="tab-history" class="tab-section">
+    <div class="section-header">
+      <span class="section-title">Historial de Trades</span>
+    </div>
+    <div id="trade-list" class="trade-list">
+      <div class="empty-state"><div class="empty-state-icon">📋</div>No hay trades registrados</div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TAB 4 — ANALYTICS
+  ════════════════════════════════════════════════════════════════════════ -->
+  <section id="tab-analytics" class="tab-section">
+
+    <!-- Stats: 6 cards, 3 columnas, 2 filas -->
+    <div class="analytics-stats-grid">
+      <div class="card">
+        <div class="card-label">Mejor Día</div>
+        <div id="a-best-day"   class="card-sub" style="margin-bottom:4px">—</div>
+        <div id="a-best-day-v" class="card-value positive">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Mejor Semana</div>
+        <div id="a-best-week"   class="card-sub" style="margin-bottom:4px">—</div>
+        <div id="a-best-week-v" class="card-value positive">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Mejor Racha</div>
+        <div id="a-best-streak"  class="card-value positive">0</div>
+        <div class="card-sub">TPs consecutivos</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Peor Racha</div>
+        <div id="a-worst-streak" class="card-value negative">0</div>
+        <div class="card-sub">SLs consecutivos</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Win Rate LONG</div>
+        <div id="a-wr-long"     class="card-value neutral">N/A</div>
+        <div id="a-wr-long-pct" class="card-sub"></div>
+        <div id="a-wr-long-pnl" class="card-sub">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Win Rate SHORT</div>
+        <div id="a-wr-short"     class="card-value neutral">N/A</div>
+        <div id="a-wr-short-pct" class="card-sub"></div>
+        <div id="a-wr-short-pnl" class="card-sub">—</div>
+      </div>
+    </div>
+
+    <!-- Charts grid -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Ratio Ganancias / Pérdidas</div>
+        <div class="chart-wrap-sm"><canvas id="chart-donut"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">P&amp;L por Kill Zone</div>
+        <div class="chart-wrap-sm"><canvas id="chart-killzone"></canvas></div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">P&amp;L por Día de la Semana</div>
+        <div class="chart-wrap-sm"><canvas id="chart-dow"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">P&amp;L por Mes</div>
+        <div class="chart-month-controls">
+          <select id="month-chart-year" class="form-select chart-year-select"></select>
+        </div>
+        <div class="chart-wrap-sm"><canvas id="chart-month"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">Resumen por Modelo / Estrategia</span>
+    </div>
+    <div id="strategy-cards" class="strategy-grid">
+      <div class="empty-state"><div class="empty-state-icon">📈</div>Sin estrategias registradas</div>
+    </div>
+
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TAB 5 — NOTAS
+  ════════════════════════════════════════════════════════════════════════ -->
+  <section id="tab-notes" class="tab-section">
+
+    <div class="notes-header">
+      <h2>Notas</h2>
+      <p>Guarda observaciones, insights y referencias de gráficos</p>
+    </div>
+
+    <div class="notes-add-row">
+      <div class="notes-add-form">
+        <textarea id="note-text" class="form-textarea" placeholder="Escribe tu nota aquí..." rows="3"></textarea>
+        <input id="note-links" class="notes-links-input" type="text" placeholder="Links (uno por línea, separados con Enter)" />
+        <div style="font-size:.75rem;color:#555;margin-bottom:8px;">Links opcionales separados por líneas</div>
+        <button id="btn-add-note" class="btn btn-primary" type="button" style="width:auto;padding:9px 24px;">+ Añadir Nota</button>
+      </div>
+    </div>
+
+    <hr class="divider" />
+    <div id="notes-list"></div>
+
+  </section>
+
+</main><!-- /content -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     EDIT MODAL
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modal-title">Editar Trade</div>
+    <form id="edit-form" autocomplete="off">
+
+      <div class="form-group">
+        <label class="form-label">Nombre de Estrategia *</label>
+        <input class="form-input" type="text" name="strategyName" required />
+      </div>
+
+      <div class="form-row form-row-3">
+        <div>
+          <label class="form-label">Fecha *</label>
+          <input class="form-input" type="date" name="date" required />
+        </div>
+        <div>
+          <label class="form-label">Símbolo *</label>
+          <input class="form-input" type="text" name="symbol" required />
+        </div>
+        <div>
+          <label class="form-label">Kill Zone *</label>
+          <select class="form-select" name="killZone" required>
+            <option value="">Seleccionar...</option>
+            <option value="Asia">Asia</option>
+            <option value="London">London</option>
+            <option value="New York">New York</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row form-row-2">
+        <div>
+          <label class="form-label">Tipo *</label>
+          <div class="radio-group">
+            <label class="radio-label buy"><input type="radio" name="side" value="BUY" /> BUY (Long)</label>
+            <label class="radio-label sell"><input type="radio" name="side" value="SELL" /> SELL (Short)</label>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Resultado *</label>
+          <div class="radio-group">
+            <label class="radio-label tp"><input type="radio" name="result" value="TP" /> TP</label>
+            <label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label>
+            <label class="radio-label"><input type="radio" name="result" value="BE" /> BE</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row form-row-2">
+        <div>
+          <label class="form-label">P&amp;L ($) *</label>
+          <input class="form-input" type="number" step="0.01" name="pnl" required />
+        </div>
+        <div>
+          <label class="form-label">RR Planificado</label>
+          <input class="form-input" type="number" step="0.1" name="rrPlanned" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Link TradingView</label>
+        <input class="form-input" type="url" name="tradingViewUrl" />
+      </div>
+
+      <div class="form-row form-row-2">
+        <div>
+          <label class="form-label">Link Imagen M3</label>
+          <input class="form-input" type="url" name="imageM3Url" />
+        </div>
+        <div>
+          <label class="form-label">Link Imagen M15</label>
+          <input class="form-input" type="url" name="imageM15Url" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea class="form-textarea" name="notes"></textarea>
+      </div>
+
+      <div id="edit-form-error" class="form-error"></div>
+    </form>
+
+    <div class="modal-actions">
+      <button id="modal-cancel" class="btn btn-cancel">Cancelar</button>
+      <button id="modal-save"   class="btn btn-primary" style="width:auto;flex:1">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     CONFIRM DELETE
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="confirm-overlay" class="confirm-overlay">
+  <div class="confirm-box">
+    <p>¿Eliminar este trade? Esta acción no se puede deshacer.</p>
+    <div class="confirm-btns">
+      <button id="confirm-no"  class="btn-confirm-no">Cancelar</button>
+      <button id="confirm-yes" class="btn-confirm-yes">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── TOAST ────────────────────────────────────────────────────────────── -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+
+<!-- ── SCRIPTS ──────────────────────────────────────────────────────────── -->
+<!-- Chart.js (UMD, único script clásico necesario) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/dexie@4.4.2/dist/dexie.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/rxjs@7.8.1/dist/bundles/rxjs.umd.min.js"></script>
+<script src="./lib/dexie-cloud.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
