@@ -1,43 +1,241 @@
 // app.js — Main application logic
-// REQUIERE type="module" en el <script> del index.html
 
 import {
   db, initDB,
   getAllTrades, addTrade, updateTrade, deleteTrade,
+  getAllLiveTrades, addLiveTrade, updateLiveTrade, deleteLiveTrade,
   getAllNotes, addNote, deleteNote
 } from './db.js';
 
 // ── STATE ────────────────────────────────────────────────────────────────────
 const state = {
+  mode: 'backtest', // 'backtest' | 'live'
   trades: [],
   notes: [],
   charts: {},
   editingTradeId: null,
   currentTab: 'dashboard',
-  historyFilters: { strategy: '', result: '', dateFrom: '', dateTo: '' }
+  analyticsStrategy: '', // '' = todas
+  historyFilters: { strategy:'', result:'', dateFrom:'', dateTo:'' }
 };
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
 async function boot() {
-  // initDB ahora maneja todo: carga el addon, abre la DB y espera a que esté lista
   await initDB();
-  console.log('[boot] db.cloud:', db.cloud ? 'disponible ✓' : 'no disponible (solo local)');
-
-  // Ahora sí db.cloud está disponible (o no, pero ya lo sabemos)
   bindCloudUI();
+  bindLoginUI();
+  checkSession();
+}
+
+// ── SESSION ───────────────────────────────────────────────────────────────────
+function checkSession() {
+  if (!db || !db.cloud) {
+    // Sin cloud: ir directo a selector de modo
+    showModeScreen();
+    return;
+  }
+  // Con cloud: escuchar usuario actual
+  try {
+    db.cloud.currentUser.subscribe(user => {
+      if (user && user.isLoggedIn) {
+        showModeScreen();
+      } else {
+        showLoginScreen();
+      }
+    });
+  } catch(e) {
+    showModeScreen();
+  }
+}
+
+// ── SCREENS ───────────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('mode-screen').style.display  = 'none';
+  document.getElementById('app-screen').style.display   = 'none';
+}
+
+async function showModeScreen() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('mode-screen').style.display  = 'block';
+  document.getElementById('app-screen').style.display   = 'none';
+  await loadAllData();
+  renderModeStats();
+  bindModeLogout();
+}
+
+function showAppScreen() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('mode-screen').style.display  = 'none';
+  document.getElementById('app-screen').style.display   = 'block';
+}
+
+window.goToModeScreen = async function() {
+  await showModeScreen();
+};
+
+window.enterMode = async function(mode) {
+  state.mode = mode;
+  showAppScreen();
+  setupModeUI();
   await loadData();
   bindNav();
   bindTradeForm();
   bindEditModal();
+  bindDetailModal();
   bindNoteForm();
   bindMonthYearFilter();
   bindHistoryFilters();
   renderAll();
+};
+
+// ── MODE UI ───────────────────────────────────────────────────────────────────
+function setupModeUI() {
+  const badge = document.getElementById('current-mode-badge');
+  const liveQ  = document.getElementById('live-questions-section');
+  const btNotes = document.getElementById('backtest-notes-section');
+  const btnSave = document.getElementById('btn-save-trade');
+
+  if (state.mode === 'live') {
+    badge.textContent = '⚡ Live';
+    badge.className = 'mode-indicator badge-mode-live';
+    if (liveQ)   liveQ.style.display   = 'block';
+    if (btNotes) btNotes.style.display = 'none';
+    if (btnSave) btnSave.textContent   = 'Guardar Trade en Vivo';
+  } else {
+    badge.textContent = '📊 Backtesting';
+    badge.className = 'mode-indicator badge-mode-bt';
+    if (liveQ)   liveQ.style.display   = 'none';
+    if (btNotes) btNotes.style.display = 'block';
+    if (btnSave) btnSave.textContent   = 'Guardar Backtest';
+  }
 }
 
+// ── LOGIN UI ──────────────────────────────────────────────────────────────────
+function bindLoginUI() {
+  const btnSendOTP = document.getElementById('btn-send-otp');
+  const btnVerify  = document.getElementById('btn-verify-otp');
+  const btnBack    = document.getElementById('btn-back-email');
+
+  if (btnSendOTP) {
+    btnSendOTP.addEventListener('click', async () => {
+      const email = document.getElementById('login-email').value.trim();
+      if (!email) { setLoginMsg('login-msg','Ingresá tu email','error'); return; }
+      if (!db.cloud) { showModeScreen(); return; }
+      btnSendOTP.disabled = true;
+      setLoginMsg('login-msg','Enviando código...','');
+      try {
+        await db.cloud.login({ email, otpOnly: true });
+        document.getElementById('login-step-email').style.display = 'none';
+        document.getElementById('login-step-otp').style.display   = 'block';
+        setLoginMsg('login-msg2','Código enviado. Revisá tu email.','success');
+      } catch(e) {
+        setLoginMsg('login-msg', e.message || 'Error al enviar código','error');
+        btnSendOTP.disabled = false;
+      }
+    });
+  }
+
+  if (btnVerify) {
+    btnVerify.addEventListener('click', async () => {
+      const otp = document.getElementById('login-otp').value.trim();
+      if (!otp) { setLoginMsg('login-msg2','Ingresá el código','error'); return; }
+      btnVerify.disabled = true;
+      setLoginMsg('login-msg2','Verificando...','');
+      try {
+        await db.cloud.login({ otp });
+      } catch(e) {
+        setLoginMsg('login-msg2', e.message || 'Código incorrecto','error');
+        btnVerify.disabled = false;
+      }
+    });
+  }
+
+  if (btnBack) {
+    btnBack.addEventListener('click', () => {
+      document.getElementById('login-step-email').style.display = 'block';
+      document.getElementById('login-step-otp').style.display   = 'none';
+      setLoginMsg('login-msg','','');
+      document.getElementById('btn-send-otp').disabled = false;
+    });
+  }
+}
+
+function setLoginMsg(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'login-msg' + (type ? ' '+type : '');
+}
+
+// ── MODE SCREEN ───────────────────────────────────────────────────────────────
+async function loadAllData() {
+  state.trades = await getAllTrades().catch(()=>[]);
+  state.liveTrades = await getAllLiveTrades().catch(()=>[]);
+}
+
+function renderModeStats() {
+  const bt   = state.trades     || [];
+  const live = state.liveTrades || [];
+  const all  = [...bt, ...live];
+
+  const mBt   = computeMetrics(bt);
+  const mLive = computeMetrics(live);
+  const mAll  = computeMetrics(all);
+
+  // Header stats
+  setEl('ms-pnl',  fmtPnl(mAll.totalPnl), colorClass(mAll.totalPnl));
+  setEl('ms-wr',   mAll.winRate!==null ? fmtPct(mAll.winRate) : 'N/A', mAll.winRate!==null ? colorClass(mAll.winRate-.5) : 'neutral');
+  setEl('ms-bt-count',   bt.length);
+  setEl('ms-live-count', live.length);
+
+  // Mode cards
+  setEl('mc-bt-count', bt.length);
+  setEl('mc-bt-wr',    mBt.winRate!==null ? fmtPct(mBt.winRate) : 'N/A');
+  setEl('mc-bt-pnl',   fmtPnl(mBt.totalPnl), colorClass(mBt.totalPnl));
+  setEl('mc-live-count', live.length);
+  setEl('mc-live-wr',  mLive.winRate!==null ? fmtPct(mLive.winRate) : 'N/A');
+  setEl('mc-live-pnl', fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
+
+  // Mode screen sync badge
+  if (db && db.cloud) {
+    try {
+      db.cloud.syncState.subscribe(s => {
+        const badge = document.getElementById('mode-sync-badge');
+        if (!badge) return;
+        const ui = syncPhaseMap(s && s.phase);
+        badge.textContent = ui.text;
+        badge.className = 'sync-badge ' + ui.cls;
+      });
+      db.cloud.currentUser.subscribe(user => {
+        const el = document.getElementById('mode-user-email');
+        if (el && user) el.textContent = user.email || '';
+      });
+    } catch(e) {}
+  }
+}
+
+function bindModeLogout() {
+  const btn = document.getElementById('btn-mode-logout');
+  if (btn) {
+    btn.onclick = () => {
+      if (db && db.cloud) {
+        db.cloud.logout({ deleteLocalData: false }).catch(()=>{});
+      } else {
+        showLoginScreen();
+      }
+    };
+  }
+}
+
+// ── DATA ──────────────────────────────────────────────────────────────────────
 async function loadData() {
-  state.trades = await getAllTrades();
-  state.notes  = await getAllNotes();
+  if (state.mode === 'live') {
+    state.trades = await getAllLiveTrades().catch(()=>[]);
+  } else {
+    state.trades = await getAllTrades().catch(()=>[]);
+  }
+  state.notes = await getAllNotes().catch(()=>[]);
 }
 
 function renderAll() {
@@ -65,16 +263,23 @@ function bindNav() {
 
 // ── METRICS ───────────────────────────────────────────────────────────────────
 function computeMetrics(trades) {
-  const totalPnl   = trades.reduce((s, t) => s + t.pnl, 0);
+  const totalPnl   = trades.reduce((s,t) => s + t.pnl, 0);
   const totalCount = trades.length;
-  const decisive   = trades.filter(t => t.result === 'TP' || t.result === 'SL');
-  const wins       = decisive.filter(t => t.result === 'TP');
-  const losses     = decisive.filter(t => t.result === 'SL');
-  const winRate    = decisive.length > 0 ? wins.length / decisive.length : null;
-  const lossRate   = winRate !== null ? 1 - winRate : null;
+  const decisive   = trades.filter(t => t.result==='TP'||t.result==='SL');
+  const wins       = decisive.filter(t => t.result==='TP');
+  const losses     = decisive.filter(t => t.result==='SL');
+  const winRate    = decisive.length > 0 ? wins.length/decisive.length : null;
+  const lossRate   = winRate !== null ? 1-winRate : null;
   const avgWin     = wins.length   > 0 ? wins.reduce((s,t)=>s+t.pnl,0)/wins.length : 0;
   const avgLoss    = losses.length > 0 ? Math.abs(losses.reduce((s,t)=>s+t.pnl,0)/losses.length) : 0;
   const ev         = winRate !== null ? (winRate*avgWin)-(lossRate*avgLoss) : null;
+  const profitFactor = avgLoss > 0 && wins.length > 0
+    ? (wins.reduce((s,t)=>s+t.pnl,0)) / Math.abs(losses.reduce((s,t)=>s+t.pnl,0))
+    : null;
+  const rrValues   = trades.filter(t=>t.rrPlanned).map(t=>t.rrPlanned);
+  const avgRR      = rrValues.length > 0 ? rrValues.reduce((a,b)=>a+b,0)/rrValues.length : null;
+  const bestTrade  = trades.length > 0 ? Math.max(...trades.map(t=>t.pnl)) : null;
+  const worstTrade = trades.length > 0 ? Math.min(...trades.map(t=>t.pnl)) : null;
 
   let bestStreak=0, worstStreak=0, curTP=0, curSL=0;
   const sorted = [...trades].sort((a,b)=>new Date(a.date)-new Date(b.date));
@@ -83,38 +288,59 @@ function computeMetrics(trades) {
     else if (t.result==='SL') { curSL++; curTP=0; worstStreak=Math.max(worstStreak,curSL); }
     else                      { curTP=0; curSL=0; }
   }
-  return { totalPnl, totalCount, winRate, ev, bestStreak, worstStreak, decisive, wins, losses };
+
+  // Drawdown
+  let peak=0, maxDD=0, ddCount=0, inDD=false, ddDays=[];
+  let eq=0, ddStart=null;
+  for (const t of sorted) {
+    eq += t.pnl;
+    if (eq > peak) {
+      if (inDD) { ddCount++; if (ddStart) ddDays.push((new Date(t.date)-ddStart)/86400000); }
+      peak = eq; inDD = false; ddStart = null;
+    } else if (eq < peak) {
+      if (!inDD) { inDD = true; ddStart = new Date(t.date); }
+      maxDD = Math.min(maxDD, eq-peak);
+    }
+  }
+  const avgDD = ddDays.length > 0 ? ddDays.reduce((a,b)=>a+b,0)/ddDays.length : 0;
+
+  // Frequency
+  const dates = [...new Set(trades.map(t=>t.date))];
+  const weeks  = [...new Set(trades.map(t=>isoWeek(t.date)))];
+  const months = [...new Set(trades.map(t=>t.date.slice(0,7)))];
+  const tradesPerDay  = dates.length  > 0 ? trades.length/dates.length  : 0;
+  const tradesPerWeek = weeks.length  > 0 ? trades.length/weeks.length  : 0;
+  const tradesPerMonth= months.length > 0 ? trades.length/months.length : 0;
+
+  return {
+    totalPnl, totalCount, winRate, lossRate, ev, profitFactor,
+    avgWin, avgLoss, avgRR, bestTrade, worstTrade,
+    bestStreak, worstStreak, decisive, wins, losses,
+    maxDD, avgDD, ddCount,
+    tradesPerDay, tradesPerWeek, tradesPerMonth
+  };
 }
 
 function equitySeries(trades) {
   const sorted = [...trades].sort((a,b)=>
     new Date(a.date+'T'+(a.createdAt||'00:00:00'))-new Date(b.date+'T'+(b.createdAt||'00:00:00')));
   let eq = 0;
-  return sorted.map(t=>({date:t.date,pnl:t.pnl,equity:(eq+=t.pnl),symbol:t.symbol,result:t.result}));
+  return sorted.map(t => ({ date:t.date, pnl:t.pnl, equity:(eq+=t.pnl), symbol:t.symbol, result:t.result }));
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
   const m = computeMetrics(state.trades);
-  document.getElementById('stat-pnl').textContent   = fmtPnl(m.totalPnl);
-  document.getElementById('stat-pnl').className     = 'card-value '+colorClass(m.totalPnl);
-  document.getElementById('stat-wr').textContent    = m.winRate!==null?fmtPct(m.winRate):'N/A';
-  document.getElementById('stat-wr').className      = 'card-value '+(m.winRate!==null?colorClass(m.winRate-0.5):'neutral');
-  document.getElementById('stat-ev').textContent    = m.ev!==null?fmtPnl(m.ev):'N/A';
-  document.getElementById('stat-ev').className      = 'card-value '+(m.ev!==null?colorClass(m.ev):'neutral');
-  document.getElementById('stat-total').textContent = m.totalCount;
-  document.getElementById('stat-best').textContent  = m.bestStreak;
-  document.getElementById('stat-worst').textContent = m.worstStreak;
-
-  const series = equitySeries(state.trades);
-  renderEquityChart(series);
-
+  setEl('stat-pnl',   fmtPnl(m.totalPnl), colorClass(m.totalPnl));
+  setEl('stat-wr',    m.winRate!==null ? fmtPct(m.winRate) : 'N/A', m.winRate!==null ? colorClass(m.winRate-.5) : 'neutral');
+  setEl('stat-ev',    m.ev!==null ? fmtPnl(m.ev) : 'N/A', m.ev!==null ? colorClass(m.ev) : 'neutral');
+  setEl('stat-total', m.totalCount);
+  setEl('stat-best',  m.bestStreak);
+  setEl('stat-worst', m.worstStreak);
+  renderEquityChart(equitySeries(state.trades), 'chart-equity');
   const recent = [...state.trades].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8);
   const container = document.getElementById('recent-trades');
-  if (recent.length===0) {
-    container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📊</div>No hay trades aún</div>';
-    return;
-  }
+  if (recent.length===0) { container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📊</div>No hay trades aún</div>'; return; }
   container.innerHTML = recent.map(t=>`
     <div class="recent-item">
       <span class="recent-symbol">${esc(t.symbol)}</span>
@@ -125,36 +351,33 @@ function renderDashboard() {
     </div>`).join('');
 }
 
-function renderEquityChart(series) {
-  const ctx = document.getElementById('chart-equity');
+function renderEquityChart(series, canvasId) {
+  const ctx = document.getElementById(canvasId);
   if (!ctx) return;
-  destroyChart('equity');
+  const key = canvasId==='chart-equity' ? 'equity' : 'equityAnalytics';
+  destroyChart(key);
   if (series.length===0) { ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height); return; }
-  const chartLabels = ['Inicio',...series.map(s=>s.date)];
-  const chartData   = [0,...series.map(s=>s.equity)];
-  const pointColors = ['#4caf50',...series.map(s=>s.equity>=0?'#4caf50':'#f44336')];
-  state.charts.equity = new Chart(ctx, {
-    type:'line',
-    data:{ labels:chartLabels, datasets:[{ label:'Equity', data:chartData,
-      borderColor:'#4caf50', backgroundColor:'rgba(76,175,80,.08)', borderWidth:2,
-      fill:true, tension:.35, pointRadius:series.length>60?0:3, pointHoverRadius:5,
-      pointBackgroundColor:pointColors }]},
+  const labels = ['Inicio',...series.map(s=>s.date)];
+  const data   = [0,...series.map(s=>s.equity)];
+  const pts    = ['#4caf50',...series.map(s=>s.equity>=0?'#4caf50':'#f44336')];
+  state.charts[key] = new Chart(ctx, {
+    type:'line', data:{ labels, datasets:[{ label:'Equity', data, borderColor:'#4caf50',
+      backgroundColor:'rgba(76,175,80,.08)', borderWidth:2, fill:true, tension:.35,
+      pointRadius:series.length>60?0:3, pointHoverRadius:5, pointBackgroundColor:pts }]},
     options:{ responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{ legend:{display:false},
-        tooltip:{ callbacks:{
-          title:items=>items[0].label==='Inicio'?'Inicio':'Fecha: '+items[0].label,
-          label:item=>' Equity: '+fmtPnl(item.raw),
-          afterLabel:(item)=>{ if(item.dataIndex===0)return''; const p=series[item.dataIndex-1];
-            return ` ${p.symbol} ${p.result}  P&L: ${fmtPnl(p.pnl)}`; }},
-          backgroundColor:'#1e1e1e',titleColor:'#888',bodyColor:'#f0f0f0',borderColor:'#2e2e2e',borderWidth:1}},
-      scales:{
-        x:{ticks:{color:'#888',maxTicksLimit:8,font:{size:11}},grid:{color:'#1e1e1e'}},
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{
+        title:items=>items[0].label==='Inicio'?'Inicio':'Fecha: '+items[0].label,
+        label:item=>' Equity: '+fmtPnl(item.raw),
+        afterLabel:(item)=>{ if(item.dataIndex===0)return''; const p=series[item.dataIndex-1];
+          return ` ${p.symbol} ${p.result}  P&L: ${fmtPnl(p.pnl)}`; }},
+        backgroundColor:'#1e1e1e',titleColor:'#888',bodyColor:'#f0f0f0',borderColor:'#2e2e2e',borderWidth:1}},
+      scales:{ x:{ticks:{color:'#888',maxTicksLimit:8,font:{size:11}},grid:{color:'#1e1e1e'}},
         y:{ticks:{color:'#888',font:{size:11},callback:v=>fmtPnl(v)},grid:{color:'#252525'}}}}
   });
 }
 
-// ── ADD/EDIT TRADE FORM ───────────────────────────────────────────────────────
+// ── TRADE FORM ────────────────────────────────────────────────────────────────
 function bindTradeForm() {
   const form = document.getElementById('trade-form');
   form.addEventListener('submit', async e => {
@@ -162,27 +385,32 @@ function bindTradeForm() {
     const data  = collectTradeForm('trade-form');
     const errEl = document.getElementById('trade-form-error');
     try {
-      await addTrade(data);
+      if (state.mode === 'live') {
+        await addLiveTrade(data);
+      } else {
+        await addTrade(data);
+      }
       showToast('Trade guardado correctamente','success');
       form.reset();
-      document.querySelectorAll('.radio-label input[name="side"]')[0].checked   = true;
-      document.querySelectorAll('.radio-label input[name="result"]')[0].checked = true;
+      form.querySelectorAll('.radio-label input[name="side"]')[0].checked   = true;
+      form.querySelectorAll('.radio-label input[name="result"]')[0].checked = true;
       await loadData(); renderAll();
     } catch(err) { errEl.textContent = err.message; }
   });
-  document.getElementById('trade-form').addEventListener('input',()=>{
-    document.getElementById('trade-form-error').textContent='';
-  });
+  form.addEventListener('input', () => { document.getElementById('trade-form-error').textContent=''; });
 }
 
 function collectTradeForm(formId) {
   const f = document.getElementById(formId);
-  const v = name => f.querySelector(`[name="${name}"]`).value;
+  const v = name => { const el=f.querySelector(`[name="${name}"]`); return el?el.value:''; };
   const r = name => { const el=f.querySelector(`[name="${name}"]:checked`); return el?el.value:''; };
-  return { strategyName:v('strategyName'), date:v('date'), symbol:v('symbol'),
-    killZone:v('killZone'), side:r('side'), result:r('result'), pnl:v('pnl'),
-    rrPlanned:v('rrPlanned'), tradingViewUrl:v('tradingViewUrl'),
-    imageM3Url:v('imageM3Url'), imageM15Url:v('imageM15Url'), notes:v('notes') };
+  return {
+    strategyName:v('strategyName'), date:v('date'), symbol:v('symbol'),
+    killZone:v('killZone'), side:r('side'), result:r('result'),
+    pnl:v('pnl'), rrPlanned:v('rrPlanned'), tradingViewUrl:v('tradingViewUrl'),
+    imageM3Url:v('imageM3Url'), imageM15Url:v('imageM15Url'),
+    notes:v('notes'), setup:v('setup'), fomo:v('fomo'), aprendizaje:v('aprendizaje')
+  };
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────────
@@ -215,18 +443,18 @@ function renderHistory() {
   if (f.result)   trades=trades.filter(t=>t.result===f.result);
   if (f.dateFrom) trades=trades.filter(t=>t.date>=f.dateFrom);
   if (f.dateTo)   trades=trades.filter(t=>t.date<=f.dateTo);
-
   const container = document.getElementById('trade-list');
   if (trades.length===0) {
-    const msg=state.trades.length>0
-      ?'<div class="empty-state"><div class="empty-state-icon">🔍</div>No hay trades que coincidan con los filtros</div>'
+    container.innerHTML = state.trades.length>0
+      ?'<div class="empty-state"><div class="empty-state-icon">🔍</div>No hay trades que coincidan</div>'
       :'<div class="empty-state"><div class="empty-state-icon">📋</div>No hay trades registrados</div>';
-    container.innerHTML=msg; return;
+    return;
   }
   const sorted=[...trades].sort((a,b)=>new Date(b.date)-new Date(a.date)||new Date(b.createdAt)-new Date(a.createdAt));
   container.innerHTML=sorted.map(t=>buildTradeCard(t)).join('');
   container.querySelectorAll('.btn-edit').forEach(btn=>btn.addEventListener('click',()=>openEditModal(btn.dataset.id)));
   container.querySelectorAll('.btn-delete').forEach(btn=>btn.addEventListener('click',()=>confirmDelete(btn.dataset.id)));
+  container.querySelectorAll('.btn-detail').forEach(btn=>btn.addEventListener('click',()=>openDetailModal(btn.dataset.id)));
 }
 
 function buildTradeCard(t) {
@@ -235,7 +463,6 @@ function buildTradeCard(t) {
     t.imageM15Url?`<a href="${esc(t.imageM15Url)}" target="_blank" rel="noopener">Imagen M15</a>`:'',
     t.tradingViewUrl?`<a href="${esc(t.tradingViewUrl)}" target="_blank" rel="noopener">TradingView</a>`:''
   ].filter(Boolean).join('');
-  const rrText = t.rrPlanned?`RR ${t.rrPlanned}`:'';
   return `
   <div class="trade-item">
     <div class="trade-item-header">
@@ -247,40 +474,129 @@ function buildTradeCard(t) {
     <div class="trade-meta">
       <span>📅 ${fmtDate(t.date)}</span><span>💱 ${esc(t.symbol)}</span>
       <span>⏰ ${esc(t.killZone)}</span>
-      ${rrText?`<span>📐 ${esc(rrText)}</span>`:''}
+      ${t.rrPlanned?`<span>📐 RR ${t.rrPlanned}</span>`:''}
     </div>
     ${links?`<div class="trade-links">${links}</div>`:''}
-    ${t.notes?`<div class="trade-notes-text">${esc(t.notes)}</div>`:''}
     <div class="trade-actions">
-      <button class="btn btn-edit" data-id="${t.id}">Editar</button>
+      <button class="btn btn-detail" data-id="${t.id}">Ver detalle</button>
+      <button class="btn btn-edit"   data-id="${t.id}">Editar</button>
       <button class="btn btn-delete" data-id="${t.id}">Borrar</button>
     </div>
   </div>`;
 }
 
-// ── EDIT MODAL ─────────────────────────────────────────────────────────────────
+// ── DETAIL MODAL ──────────────────────────────────────────────────────────────
+function bindDetailModal() {
+  document.getElementById('detail-modal-close').addEventListener('click', closeDetailModal);
+  document.getElementById('detail-modal').addEventListener('click', e=>{
+    if (e.target===e.currentTarget) closeDetailModal();
+  });
+}
+
+function openDetailModal(id) {
+  const t = state.trades.find(x=>x.id===id);
+  if (!t) return;
+  const modeLabel = state.mode==='live'
+    ? '<span class="badge badge-mode-live">Live</span>'
+    : '<span class="badge badge-mode-bt">Backtest</span>';
+  document.getElementById('detail-modal-title').innerHTML =
+    `${esc(t.strategyName)} ${modeLabel} <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span> <span class="badge ${badgeResult(t.result)}">${t.result}</span>`;
+
+  const links = [
+    t.imageM3Url?`<a class="detail-link" href="${esc(t.imageM3Url)}" target="_blank" rel="noopener">Imagen M3</a>`:'',
+    t.imageM15Url?`<a class="detail-link" href="${esc(t.imageM15Url)}" target="_blank" rel="noopener">Imagen M15</a>`:'',
+    t.tradingViewUrl?`<a class="detail-link" href="${esc(t.tradingViewUrl)}" target="_blank" rel="noopener">TradingView</a>`:''
+  ].filter(Boolean).join('');
+
+  const liveSection = state.mode==='live' ? `
+    <div class="detail-section">Análisis del Trade</div>
+    <div class="detail-question">
+      <div class="detail-question-label">¿Cuál fue tu setup?</div>
+      <div class="detail-question-answer">${esc(t.setup||'—')}</div>
+    </div>
+    <div class="detail-question">
+      <div class="detail-question-label">¿Tuviste FOMO o dudas?</div>
+      <div class="detail-question-answer">${esc(t.fomo||'—')}</div>
+    </div>
+    <div class="detail-question">
+      <div class="detail-question-label">¿Qué aprendiste?</div>
+      <div class="detail-question-answer">${esc(t.aprendizaje||'—')}</div>
+    </div>` : (t.notes ? `
+    <div class="detail-section">Notas</div>
+    <div class="detail-question"><div class="detail-question-answer">${esc(t.notes)}</div></div>` : '');
+
+  document.getElementById('detail-modal-body').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-card">
+        <div class="detail-card-label">P&L</div>
+        <div class="detail-card-value ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-label">RR Planificado</div>
+        <div class="detail-card-value">${t.rrPlanned||'—'}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-label">Fecha</div>
+        <div class="detail-card-value">${fmtDate(t.date)}</div>
+      </div>
+    </div>
+    <div class="detail-section">Detalles</div>
+    <div class="detail-row"><span class="detail-row-label">Símbolo</span><span class="detail-row-value">${esc(t.symbol)}</span></div>
+    <div class="detail-row"><span class="detail-row-label">Kill Zone</span><span class="detail-row-value">${esc(t.killZone)}</span></div>
+    <div class="detail-row"><span class="detail-row-label">Lado</span><span class="detail-row-value">${t.side==='BUY'?'BUY (Long)':'SELL (Short)'}</span></div>
+    <div class="detail-row"><span class="detail-row-label">Resultado</span><span class="detail-row-value">${t.result}</span></div>
+    ${liveSection}
+    ${links?`<div class="detail-section">Referencias</div><div class="detail-links">${links}</div>`:''}
+  `;
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function closeDetailModal() {
+  document.getElementById('detail-modal').classList.remove('open');
+}
+
+// ── EDIT MODAL ────────────────────────────────────────────────────────────────
 function bindEditModal() {
   document.getElementById('modal-save').addEventListener('click', async()=>{
     const data=collectTradeForm('edit-form');
     const errEl=document.getElementById('edit-form-error');
-    try { await updateTrade(state.editingTradeId,data); closeEditModal();
-      showToast('Trade actualizado','success'); await loadData(); renderAll();
-    } catch(err){errEl.textContent=err.message;}
+    try {
+      if (state.mode==='live') {
+        await updateLiveTrade(state.editingTradeId, data);
+      } else {
+        await updateTrade(state.editingTradeId, data);
+      }
+      closeEditModal();
+      showToast('Trade actualizado','success');
+      await loadData(); renderAll();
+    } catch(err){ errEl.textContent=err.message; }
   });
   document.getElementById('modal-cancel').addEventListener('click',closeEditModal);
   document.getElementById('edit-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeEditModal();});
 }
 
 function openEditModal(id) {
-  const t=state.trades.find(x=>x.id===id); if(!t)return;
+  const t=state.trades.find(x=>x.id===id); if(!t) return;
   state.editingTradeId=id;
   const f=document.getElementById('edit-form');
   const set=(name,val)=>{const el=f.querySelector(`[name="${name}"]`);if(el)el.value=val??'';};
   const setRadio=(name,val)=>f.querySelectorAll(`[name="${name}"]`).forEach(r=>{r.checked=r.value===val;});
   set('strategyName',t.strategyName); set('date',t.date); set('symbol',t.symbol);
   set('killZone',t.killZone); setRadio('side',t.side); setRadio('result',t.result);
-  set('pnl',t.pnl); set('rrPlanned',t.rrPlanned??''); set('tradingViewUrl',t.tradingViewUrl);
-  set('imageM3Url',t.imageM3Url); set('imageM15Url',t.imageM15Url); set('notes',t.notes);
+  set('pnl',t.pnl); set('rrPlanned',t.rrPlanned??'');
+  set('tradingViewUrl',t.tradingViewUrl); set('imageM3Url',t.imageM3Url); set('imageM15Url',t.imageM15Url);
+  // mode-specific
+  const liveQ  = document.getElementById('edit-live-questions');
+  const btNotes= document.getElementById('edit-backtest-notes');
+  if (state.mode==='live') {
+    if(liveQ)   liveQ.style.display='block';
+    if(btNotes) btNotes.style.display='none';
+    set('setup',t.setup); set('fomo',t.fomo); set('aprendizaje',t.aprendizaje);
+  } else {
+    if(liveQ)   liveQ.style.display='none';
+    if(btNotes) btNotes.style.display='block';
+    set('notes',t.notes);
+  }
   document.getElementById('edit-form-error').textContent='';
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -290,64 +606,206 @@ function closeEditModal() {
   state.editingTradeId=null;
 }
 
-// ── CONFIRM DELETE ─────────────────────────────────────────────────────────────
+// ── CONFIRM DELETE ────────────────────────────────────────────────────────────
 function confirmDelete(id) {
   const overlay=document.getElementById('confirm-overlay');
   overlay.classList.add('open');
   document.getElementById('confirm-yes').onclick=async()=>{
-    await deleteTrade(id); overlay.classList.remove('open');
-    showToast('Trade eliminado','success'); await loadData(); renderAll();
+    if (state.mode==='live') { await deleteLiveTrade(id); }
+    else                     { await deleteTrade(id); }
+    overlay.classList.remove('open');
+    showToast('Trade eliminado','success');
+    await loadData(); renderAll();
   };
   document.getElementById('confirm-no').onclick=()=>overlay.classList.remove('open');
 }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
 function renderAnalytics() {
-  const trades=state.trades, m=computeMetrics(trades);
-  const byDay=groupBy(trades,t=>t.date);
-  let bestDayLabel='—',bestDayVal=0;
-  for(const[d,ts]of Object.entries(byDay)){const s=ts.reduce((a,t)=>a+t.pnl,0);if(s>bestDayVal){bestDayVal=s;bestDayLabel=fmtDate(d);}}
-  const byWeek=groupBy(trades,t=>isoWeek(t.date));
-  let bestWeekLabel='—',bestWeekVal=0;
-  for(const[w,ts]of Object.entries(byWeek)){const s=ts.reduce((a,t)=>a+t.pnl,0);if(s>bestWeekVal){bestWeekVal=s;bestWeekLabel='Sem '+w;}}
-  const longs=trades.filter(t=>t.side==='BUY'&&t.result!=='BE');
-  const shorts=trades.filter(t=>t.side==='SELL'&&t.result!=='BE');
-  const longWins=longs.filter(t=>t.result==='TP'),shortWins=shorts.filter(t=>t.result==='TP');
-  const longWR=longs.length>0?longWins.length/longs.length:null;
-  const shortWR=shorts.length>0?shortWins.length/shorts.length:null;
-  const longPnl=trades.filter(t=>t.side==='BUY').reduce((s,t)=>s+t.pnl,0);
-  const shortPnl=trades.filter(t=>t.side==='SELL').reduce((s,t)=>s+t.pnl,0);
+  // Build strategy filter buttons
+  const strategies = [...new Set(state.trades.map(t=>t.strategyName))].sort();
+  const btnContainer = document.getElementById('strategy-filter-btns');
+  if (btnContainer) {
+    btnContainer.innerHTML = `<button class="strategy-filter-btn ${!state.analyticsStrategy?'active':''}" data-strategy="">Todas</button>`
+      + strategies.map(s=>`<button class="strategy-filter-btn ${state.analyticsStrategy===s?'active':''}" data-strategy="${esc(s)}">${esc(s)}</button>`).join('');
+    btnContainer.querySelectorAll('.strategy-filter-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        state.analyticsStrategy = btn.dataset.strategy;
+        renderAnalytics();
+      });
+    });
+  }
 
-  document.getElementById('a-best-day').textContent    = bestDayLabel;
-  document.getElementById('a-best-day-v').textContent  = fmtPnl(bestDayVal);
-  document.getElementById('a-best-day-v').className    = 'card-value '+colorClass(bestDayVal);
-  document.getElementById('a-best-week').textContent   = bestWeekLabel;
-  document.getElementById('a-best-week-v').textContent = fmtPnl(bestWeekVal);
-  document.getElementById('a-best-week-v').className   = 'card-value '+colorClass(bestWeekVal);
-  document.getElementById('a-best-streak').textContent = m.bestStreak;
-  document.getElementById('a-worst-streak').textContent= m.worstStreak;
-  document.getElementById('a-wr-long').textContent     = longWR!==null?`${longWins.length}/${longs.length}`:'N/A';
-  document.getElementById('a-wr-long-pct').textContent = longWR!==null?fmtPct(longWR):'';
-  document.getElementById('a-wr-long-pnl').textContent = fmtPnl(longPnl);
-  document.getElementById('a-wr-long-pnl').className   = 'card-sub '+colorClass(longPnl);
-  document.getElementById('a-wr-short').textContent    = shortWR!==null?`${shortWins.length}/${shorts.length}`:'N/A';
-  document.getElementById('a-wr-short-pct').textContent= shortWR!==null?fmtPct(shortWR):'';
-  document.getElementById('a-wr-short-pnl').textContent= fmtPnl(shortPnl);
-  document.getElementById('a-wr-short-pnl').className  = 'card-sub '+colorClass(shortPnl);
+  const trades = state.analyticsStrategy
+    ? state.trades.filter(t=>t.strategyName===state.analyticsStrategy)
+    : state.trades;
 
-  renderDonutChart(m.decisive.length>0?m.wins.length:0,m.decisive.length>0?m.losses.length:0);
-  renderKillZoneChart(trades); renderDowChart(trades); renderMonthChart(trades); renderStrategyCards(trades);
+  const m = computeMetrics(trades);
+
+  // Métricas clave
+  const metricsGrid = document.getElementById('analytics-metrics-grid');
+  if (metricsGrid) {
+    metricsGrid.innerHTML = [
+      metricCard('P&L Total', fmtPnl(m.totalPnl), colorClass(m.totalPnl), null,
+        'Suma total de ganancias y pérdidas de todos los trades.'),
+      metricCard('Win Rate', m.winRate!==null?fmtPct(m.winRate):'N/A', m.winRate!==null?colorClass(m.winRate-.5):'neutral', 'excl. BE',
+        'Porcentaje de trades ganadores sobre el total de trades decisivos (TP+SL).'),
+      metricCard('Profit Factor', m.profitFactor!==null?m.profitFactor.toFixed(2):'N/A', m.profitFactor!==null?colorClass(m.profitFactor-1):'neutral', null,
+        'Divide el total de ganancias entre el total de pérdidas. Mayor a 1 = sistema rentable.'),
+      metricCard('Expected Value', m.ev!==null?fmtPnl(m.ev):'N/A', m.ev!==null?colorClass(m.ev):'neutral', 'excl. BE',
+        'Resultado promedio esperado por trade si seguís operando igual. Positivo = sistema con ventaja.'),
+      metricCard('RR Prom. Real', m.avgRR!==null?m.avgRR.toFixed(2):'N/A', 'neutral', 'planificado',
+        'Risk/Reward promedio planificado de tus trades. Si es menor al ideal, revisá tu gestión de salidas.'),
+      metricCard('Mejor Trade', m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A', 'positive', null,
+        'El trade individual con mayor ganancia.'),
+      metricCard('Peor Trade', m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A', 'negative', null,
+        'El trade individual con mayor pérdida.'),
+      metricCard('Total Trades', m.totalCount, 'neutral', `${m.wins.length} TP · ${m.losses.length} SL · ${m.totalCount-m.decisive.length} BE`,
+        'Cantidad total de trades registrados incluyendo breakevens.'),
+    ].join('');
+  }
+
+  // Winners / Losers
+  const wlGrid = document.getElementById('analytics-wl-grid');
+  if (wlGrid) {
+    const avgWinPct = m.wins.length>0 && m.avgWin>0 ? '+'+m.avgWin.toFixed(2)+' $' : '—';
+    const avgLossPct= m.losses.length>0 ? '-'+m.avgLoss.toFixed(2)+' $' : '—';
+    wlGrid.innerHTML = `
+      <div class="wl-card">
+        <div class="wl-title" style="color:var(--green)">✅ Ganadores</div>
+        <div class="wl-row"><span class="wl-key">Total</span><span class="wl-val">${m.wins.length}</span></div>
+        <div class="wl-row"><span class="wl-key">Mejor ganancia</span><span class="wl-val positive">${m.bestTrade!==null&&m.bestTrade>0?fmtPnl(m.bestTrade):'—'}</span></div>
+        <div class="wl-row"><span class="wl-key">Promedio ganancia</span><span class="wl-val positive">${avgWinPct}</span></div>
+        <div class="wl-row"><span class="wl-key">Racha máx. ganadora</span><span class="wl-val">${m.bestStreak}</span></div>
+      </div>
+      <div class="wl-card">
+        <div class="wl-title" style="color:var(--red)">❌ Perdedores</div>
+        <div class="wl-row"><span class="wl-key">Total</span><span class="wl-val">${m.losses.length}</span></div>
+        <div class="wl-row"><span class="wl-key">Peor pérdida</span><span class="wl-val negative">${m.worstTrade!==null&&m.worstTrade<0?fmtPnl(m.worstTrade):'—'}</span></div>
+        <div class="wl-row"><span class="wl-key">Promedio pérdida</span><span class="wl-val negative">${avgLossPct}</span></div>
+        <div class="wl-row"><span class="wl-key">Racha máx. perdedora</span><span class="wl-val">${m.worstStreak}</span></div>
+      </div>`;
+  }
+
+  // Drawdown
+  const ddGrid = document.getElementById('analytics-dd-grid');
+  if (ddGrid) {
+    ddGrid.innerHTML = [
+      metricCard('Max Drawdown', m.maxDD!==0?fmtPnl(m.maxDD):'—', m.maxDD<0?'negative':'neutral', null,
+        'La mayor caída acumulada desde un pico hasta el punto más bajo antes de recuperarse.'),
+      metricCard('Drawdown Promedio', m.avgDD>0?m.avgDD.toFixed(1)+' días':'—', 'neutral', null,
+        'Tiempo promedio que tardó tu cuenta en recuperarse luego de cada drawdown.'),
+      metricCard('Frecuencia DD', m.ddCount, 'neutral', 'veces',
+        'Cuántas veces tu cuenta entró en drawdown. Alta frecuencia puede indicar inconsistencia.'),
+      metricCard('Mejor Racha', m.bestStreak, 'positive', 'TPs consecutivos',
+        'Mayor cantidad de trades ganadores consecutivos.'),
+    ].join('');
+  }
+
+  // Frecuencia
+  const freqGrid = document.getElementById('analytics-freq-grid');
+  if (freqGrid) {
+    freqGrid.innerHTML = `
+      <div class="freq-card"><div class="freq-label">Trades / día (prom.)</div><div class="freq-value">${m.tradesPerDay.toFixed(1)}</div></div>
+      <div class="freq-card"><div class="freq-label">Trades / semana (prom.)</div><div class="freq-value">${m.tradesPerWeek.toFixed(1)}</div></div>
+      <div class="freq-card"><div class="freq-label">Trades / mes (prom.)</div><div class="freq-value">${m.tradesPerMonth.toFixed(1)}</div></div>`;
+  }
+
+  // P&L + WR por día
+  renderDayWR(trades);
+
+  // Charts
+  renderDonutChart(m.wins.length, m.losses.length, m.totalCount-m.decisive.length);
+  renderKillZoneChart(trades);
+  renderMonthChart(trades);
+  renderEquityChart(equitySeries(trades), 'chart-equity-analytics');
+
+  // Calendario
+  renderPerfCalendar(trades);
 }
 
-function renderDonutChart(wins,losses) {
+function metricCard(label, value, cls, sub, tooltip) {
+  return `<div class="card">
+    <div class="card-label">
+      ${label}
+      ${tooltip?`<div class="tooltip-wrap"><div class="tooltip-icon">i</div><div class="tooltip-box"><div class="tooltip-box-title">${label}</div>${tooltip}</div></div>`:''}
+    </div>
+    <div class="card-value ${cls||''}">${value}</div>
+    ${sub?`<div class="card-sub">${sub}</div>`:''}
+  </div>`;
+}
+
+function renderDayWR(trades) {
+  const wrap = document.getElementById('analytics-daywr');
+  if (!wrap) return;
+  const days=['Lunes','Martes','Miércoles','Jueves','Viernes'];
+  const map={};
+  days.forEach(d=>{map[d]={pnl:0,wins:0,total:0};});
+  trades.forEach(t=>{
+    const d=new Date(t.date+'T12:00:00');
+    const name=days[d.getDay()===0?6:d.getDay()-1];
+    if(!name||!map[name]) return;
+    map[name].pnl+=t.pnl;
+    if(t.result!=='BE') map[name].total++;
+    if(t.result==='TP') map[name].wins++;
+  });
+  const maxPnl = Math.max(...days.map(d=>Math.abs(map[d].pnl)),1);
+  wrap.innerHTML = days.map(d=>{
+    const {pnl,wins,total}=map[d];
+    const wr = total>0 ? wins/total : null;
+    const barW = Math.round(Math.abs(pnl)/maxPnl*100);
+    const barColor = pnl>=0?'var(--green)':'var(--red)';
+    return `<div class="daywr-row">
+      <span class="daywr-name">${d}</span>
+      <div class="daywr-bar-wrap"><div class="daywr-bar" style="width:${barW}%;background:${barColor}"></div></div>
+      <span class="daywr-pct ${wr!==null?colorClass(wr-.5):'neutral'}">${wr!==null?fmtPct(wr):'N/A'}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderPerfCalendar(trades) {
+  const wrap = document.getElementById('perf-calendar-wrap');
+  if (!wrap) return;
+  const byDay={};
+  trades.forEach(t=>{ byDay[t.date]=(byDay[t.date]||0)+t.pnl; });
+  if (Object.keys(byDay).length===0) { wrap.innerHTML='<div class="empty-state" style="padding:24px">Sin datos</div>'; return; }
+  const dates = Object.keys(byDay).sort();
+  const months=[...new Set(dates.map(d=>d.slice(0,7)))].sort().reverse().slice(0,3);
+  wrap.innerHTML = months.map(month=>{
+    const [y,m] = month.split('-').map(Number);
+    const firstDay = new Date(y,m-1,1).getDay();
+    const daysInMonth = new Date(y,m,0).getDate();
+    const offset = firstDay===0?6:firstDay-1;
+    const monthNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    let cells='';
+    for(let i=0;i<offset;i++) cells+=`<div class="cal-day empty"></div>`;
+    for(let d=1;d<=daysInMonth;d++) {
+      const key=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const pnl=byDay[key];
+      if(pnl===undefined) { cells+=`<div class="cal-day no-data"><span class="cal-num">${d}</span></div>`; }
+      else { cells+=`<div class="cal-day ${pnl>=0?'pos':'neg'}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnl>=0?'+':''}${pnl.toFixed(0)}$</span></div>`; }
+    }
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:.82rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">${monthNames[m-1]} ${y}</div>
+      <div class="perf-calendar">
+        <div class="cal-header">Lun</div><div class="cal-header">Mar</div><div class="cal-header">Mié</div>
+        <div class="cal-header">Jue</div><div class="cal-header">Vie</div><div class="cal-header">Sáb</div><div class="cal-header">Dom</div>
+        ${cells}
+      </div></div>`;
+  }).join('');
+}
+
+function renderDonutChart(wins, losses, bes) {
   const ctx=document.getElementById('chart-donut'); if(!ctx)return;
-  destroyChart('donut'); if(wins+losses===0)return;
+  destroyChart('donut');
+  if(wins+losses+bes===0)return;
   state.charts.donut=new Chart(ctx,{type:'doughnut',
-    data:{labels:['Ganancias (TP)','Pérdidas (SL)'],datasets:[{data:[wins,losses],backgroundColor:['#4caf50','#f44336'],borderWidth:0}]},
+    data:{labels:['TP','SL','BE'],datasets:[{data:[wins,losses,bes],
+      backgroundColor:['rgba(76,175,80,.8)','rgba(244,67,54,.8)','rgba(136,136,136,.5)'],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'bottom',labels:{color:'#888',font:{size:11}}},
-        tooltip:{callbacks:{label:item=>` ${item.label}: ${item.raw} trades (${fmtPct(item.raw/(wins+losses))})`},
-        backgroundColor:'#1e1e1e',titleColor:'#888',bodyColor:'#f0f0f0',borderColor:'#2e2e2e',borderWidth:1}}}});
+        tooltip:{callbacks:{label:item=>` ${item.label}: ${item.raw}`},
+        backgroundColor:'#1e1e1e',bodyColor:'#f0f0f0',borderColor:'#2e2e2e',borderWidth:1}}}});
 }
 
 function renderKillZoneChart(trades) {
@@ -357,16 +815,6 @@ function renderKillZoneChart(trades) {
   const data=labels.map(k=>map[k].reduce((s,t)=>s+t.pnl,0));
   if(labels.length===0)return;
   state.charts.killzone=barChart(ctx,labels,data,'P&L por Kill Zone');
-}
-
-function renderDowChart(trades) {
-  const ctx=document.getElementById('chart-dow'); if(!ctx)return;
-  destroyChart('dow');
-  const days=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
-  const map={};days.forEach(d=>{map[d]=0;});
-  trades.forEach(t=>{const d=new Date(t.date+'T12:00:00');const name=days[d.getDay()===0?6:d.getDay()-1];map[name]=(map[name]||0)+t.pnl;});
-  const labels=['Lunes','Martes','Miércoles','Jueves','Viernes'];
-  state.charts.dow=barChart(ctx,labels,labels.map(d=>map[d]||0),'P&L por Día');
 }
 
 function renderMonthChart(trades) {
@@ -392,7 +840,7 @@ function renderMonthChart(trades) {
 
 function bindMonthYearFilter() {
   const sel=document.getElementById('month-chart-year');
-  if(sel)sel.addEventListener('change',()=>renderMonthChart(state.trades));
+  if(sel) sel.addEventListener('change',()=>renderMonthChart(state.trades));
 }
 
 function barChart(ctx,labels,data,label) {
@@ -405,23 +853,6 @@ function barChart(ctx,labels,data,label) {
         backgroundColor:'#1e1e1e',titleColor:'#888',bodyColor:'#f0f0f0',borderColor:'#2e2e2e',borderWidth:1}},
       scales:{x:{ticks:{color:'#888',font:{size:11}},grid:{color:'#1e1e1e'}},
         y:{ticks:{color:'#888',font:{size:11},callback:v=>fmtPnl(v)},grid:{color:'#252525'}}}}});
-}
-
-function renderStrategyCards(trades) {
-  const map=groupBy(trades,t=>t.strategyName);
-  const container=document.getElementById('strategy-cards');
-  if(Object.keys(map).length===0){
-    container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📈</div>Sin estrategias registradas</div>';return;}
-  container.innerHTML=Object.entries(map).map(([name,ts])=>{
-    const dec=ts.filter(t=>t.result!=='BE'),wins=dec.filter(t=>t.result==='TP').length;
-    const wr=dec.length>0?fmtPct(wins/dec.length):'N/A';
-    const pnl=ts.reduce((s,t)=>s+t.pnl,0);
-    return `<div class="strategy-card">
-      <div class="strategy-name" title="${esc(name)}">${esc(name)}</div>
-      <div class="strategy-stat"><span>Trades</span><span>${ts.length}</span></div>
-      <div class="strategy-stat"><span>Win Rate</span><span>${wr}</span></div>
-      <div class="strategy-stat"><span>P&L Total</span><span class="${colorClass(pnl)}">${fmtPnl(pnl)}</span></div>
-    </div>`;}).join('');
 }
 
 // ── NOTES ─────────────────────────────────────────────────────────────────────
@@ -438,8 +869,7 @@ function bindNoteForm() {
 
 function renderNotes() {
   const container=document.getElementById('notes-list');
-  if(state.notes.length===0){
-    container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📝</div>No hay notas aún</div>';return;}
+  if(state.notes.length===0){container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📝</div>No hay notas aún</div>';return;}
   container.innerHTML=state.notes.map(n=>`
     <div class="note-item">
       <div class="note-item-header">
@@ -460,32 +890,19 @@ function renderNotes() {
 // ── CLOUD UI ──────────────────────────────────────────────────────────────────
 function bindCloudUI() {
   if (!db || !db.cloud) {
-    // Sin cloud: ocultar el botón de login para no confundir
-    const loginBtn = document.getElementById('btn-cloud-login');
-    const syncBadge = document.getElementById('sync-status');
-    if (loginBtn) loginBtn.style.display = 'none';
-    if (syncBadge) { syncBadge.textContent = 'Solo local'; }
+    const loginBtn=document.getElementById('btn-cloud-login');
+    const syncBadge=document.getElementById('sync-status');
+    if(loginBtn) loginBtn.style.display='none';
+    if(syncBadge){syncBadge.textContent='Solo local';}
     return;
   }
-
-  const syncPhaseMap = phase => {
-    if (!phase||phase==='not-started'||phase==='offline'||phase==='disconnected'||phase==='error')
-      return {text:'Offline',cls:'sync-offline'};
-    if (phase==='connecting'||phase==='pushing'||phase==='pulling')
-      return {text:'Sincronizando...',cls:'sync-syncing'};
-    if (phase==='in-sync'||phase==='connected')
-      return {text:'Sincronizado',cls:'sync-ok'};
-    return {text:'Offline',cls:'sync-offline'};
-  };
-
   try {
     db.cloud.syncState.subscribe(syncState=>{
       const badge=document.getElementById('sync-status'); if(!badge)return;
       const ui=syncPhaseMap(syncState&&syncState.phase);
       badge.textContent=ui.text; badge.className='sync-badge '+ui.cls;
     });
-  } catch(e){console.warn('syncState subscribe falló:',e.message);}
-
+  } catch(e){}
   try {
     db.cloud.currentUser.subscribe(user=>{
       const loginBtn=document.getElementById('btn-cloud-login');
@@ -499,17 +916,18 @@ function bindCloudUI() {
         loginBtn.style.display=''; userWrap.style.display='none';
       }
     });
-  } catch(e){console.warn('currentUser subscribe falló:',e.message);}
-
+  } catch(e){}
   const loginBtn=document.getElementById('btn-cloud-login');
-  if(loginBtn)loginBtn.addEventListener('click',()=>{
-    db.cloud.login().catch(e=>showToast('Error al iniciar sesión: '+e.message,'error'));
-  });
-
+  if(loginBtn) loginBtn.addEventListener('click',()=>{ db.cloud.login().catch(e=>showToast('Error: '+e.message,'error')); });
   const logoutBtn=document.getElementById('btn-cloud-logout');
-  if(logoutBtn)logoutBtn.addEventListener('click',()=>{
-    db.cloud.logout({deleteLocalData:false}).catch(e=>showToast('Error al cerrar sesión: '+e.message,'error'));
-  });
+  if(logoutBtn) logoutBtn.addEventListener('click',()=>{ db.cloud.logout({deleteLocalData:false}).catch(()=>{}); });
+}
+
+function syncPhaseMap(phase) {
+  if(!phase||['not-started','offline','disconnected','error'].includes(phase)) return {text:'Offline',cls:'sync-offline'};
+  if(['connecting','pushing','pulling'].includes(phase)) return {text:'Sincronizando...',cls:'sync-syncing'};
+  if(['in-sync','connected'].includes(phase)) return {text:'Sincronizado',cls:'sync-ok'};
+  return {text:'Offline',cls:'sync-offline'};
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -523,7 +941,8 @@ function fmtDateTime(iso){if(!iso)return'—';const dt=new Date(iso);return dt.t
 function esc(str){return String(str??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function groupBy(arr,fn){return arr.reduce((acc,item)=>{const k=fn(item);if(!acc[k])acc[k]=[];acc[k].push(item);return acc;},{});}
 function isoWeek(dateStr){const d=new Date(dateStr+'T12:00:00');const jan4=new Date(d.getFullYear(),0,4);const week1=new Date(jan4.getTime()-(jan4.getDay()||7-1)*86400000);return d.getFullYear()+'-W'+String(Math.ceil((d-week1)/(7*86400000))).padStart(2,'0');}
+function setEl(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls)el.className='card-value '+cls;}
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(t._timer);t._timer=setTimeout(()=>{t.classList.remove('show');},3000);}
 
-// ── INIT ───────────────────────────────────────────────────────────────────────
+// ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', boot);
