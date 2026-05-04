@@ -71,19 +71,23 @@ window.enterMode = async function(mode) {
   showAppScreen();
   setupModeUI();
   await loadData();
-  // Solo bindear una vez
-  if (!state.bound) {
-    bindNav();
-    bindTradeForm();
-    bindEditModal();
-    bindDetailModal();
-    bindNoteForm();
-    bindMonthYearFilter();
-    bindHistoryFilters();
-    state.bound = true;
-  }
+  resetFormListeners();
+  bindNav();
+  bindTradeForm();
+  bindEditModal();
+  bindDetailModal();
+  bindNoteForm();
+  bindMonthYearFilter();
+  bindHistoryFilters();
   renderAll();
 };
+
+function resetFormListeners() {
+  ['trade-form','btn-add-note','modal-save','modal-cancel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { const clone = el.cloneNode(true); el.parentNode.replaceChild(clone, el); }
+  });
+}
 
 // ── MODE UI ───────────────────────────────────────────────────────────────────
 function setupModeUI() {
@@ -615,6 +619,15 @@ function renderAnalytics() {
     metricCard('Mejor Trade',m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A','positive',null,'El trade individual con mayor ganancia.'),
     metricCard('Peor Trade',m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A','negative',null,'El trade individual con mayor pérdida.'),
     metricCard('Total Trades',m.totalCount,'neutral',`${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`,'Total de trades registrados.'),
+    // BE outcome cards inline con las métricas
+    ...(m.bes.length > 0 ? [
+      metricCard('BE → Continuó a TP', m.beToTP, 'positive',
+        `${m.bes.length>0?Math.round(m.beToTP/m.bes.length*100):0}% de ${m.bes.length} BE`,
+        'Breakevens donde el precio continuó hacia el TP después de sacarte. El mercado validó tu dirección.'),
+      metricCard('BE → Continuó a SL', m.beToSL, 'negative',
+        `${m.bes.length>0?Math.round(m.beToSL/m.bes.length*100):0}% de ${m.bes.length} BE`,
+        'Breakevens donde el precio fue al SL después de sacarte. El BE te protegió de una pérdida.'),
+    ] : []),
   ].join('');
 
   // Winners / Losers
@@ -635,36 +648,9 @@ function renderAnalytics() {
       <div class="wl-row"><span class="wl-key">Racha máx. perdedora</span><span class="wl-val">${m.worstStreak}</span></div>
     </div>`;
 
-  // BE outcome cards
+  // BE outcome cards van inline en analytics-metrics-grid (ver arriba)
   const beGrid=document.getElementById('analytics-be-grid');
-  if(beGrid){
-    const total=m.bes.length;
-    const tpPct=total>0?Math.round(m.beToTP/total*100):0;
-    const slPct=total>0?Math.round(m.beToSL/total*100):0;
-    beGrid.innerHTML=total===0?'':`
-      <div class="card">
-        <div class="card-label">BE → Continuó a TP
-          <div class="tooltip-wrap"><div class="tooltip-icon">i</div>
-          <div class="tooltip-box"><div class="tooltip-box-title">BE → TP</div>Breakevens donde el precio continuó hacia el Take Profit después de sacarte. El mercado validó tu dirección — revisá si podés dejar correr más las ganancias.</div></div>
-        </div>
-        <div class="card-value positive">${m.beToTP}</div>
-        <div class="card-sub">${tpPct}% de ${total} BE totales</div>
-        <div style="height:5px;border-radius:3px;background:var(--bg-input);margin-top:8px;overflow:hidden">
-          <div style="height:100%;width:${tpPct}%;background:var(--green);border-radius:3px"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-label">BE → Continuó a SL
-          <div class="tooltip-wrap"><div class="tooltip-icon">i</div>
-          <div class="tooltip-box"><div class="tooltip-box-title">BE → SL</div>Breakevens donde el precio fue hacia el Stop Loss después de sacarte. El BE te protegió de una pérdida — analizá si tu stop estaba bien ubicado.</div></div>
-        </div>
-        <div class="card-value negative">${m.beToSL}</div>
-        <div class="card-sub">${slPct}% de ${total} BE totales</div>
-        <div style="height:5px;border-radius:3px;background:var(--bg-input);margin-top:8px;overflow:hidden">
-          <div style="height:100%;width:${slPct}%;background:var(--red);border-radius:3px"></div>
-        </div>
-      </div>`;
-  }
+  if(beGrid) beGrid.innerHTML='';
 
   // Drawdown
   const ddGrid=document.getElementById('analytics-dd-grid');
