@@ -95,18 +95,34 @@ function setupModeUI() {
   const liveQ   = document.getElementById('live-questions-section');
   const btNotes = document.getElementById('backtest-notes-section');
   const btnSave = document.getElementById('btn-save-trade');
+  // Smart dropdown fields
+  const stratBT   = document.getElementById('strategy-bt-field');
+  const stratLive = document.getElementById('strategy-live-field');
+  const symBT     = document.getElementById('symbol-bt-field');
+  const symLive   = document.getElementById('symbol-live-field');
+
   if (state.mode === 'live') {
     badge.textContent = '⚡ Live';
     badge.className   = 'mode-indicator badge-mode-live';
-    if (liveQ)   liveQ.style.display   = 'block';
-    if (btNotes) btNotes.style.display = 'none';
-    if (btnSave) btnSave.textContent   = 'Guardar Trade en Vivo';
+    if (liveQ)    liveQ.style.display    = 'block';
+    if (btNotes)  btNotes.style.display  = 'none';
+    if (btnSave)  btnSave.textContent    = 'Guardar Trade en Vivo';
+    // Mostrar inputs normales en live
+    if (stratBT)   stratBT.style.display   = 'none';
+    if (stratLive) stratLive.style.display = 'block';
+    if (symBT)     symBT.style.display     = 'none';
+    if (symLive)   symLive.style.display   = 'block';
   } else {
     badge.textContent = '📊 Backtesting';
     badge.className   = 'mode-indicator badge-mode-bt';
-    if (liveQ)   liveQ.style.display   = 'none';
-    if (btNotes) btNotes.style.display = 'block';
-    if (btnSave) btnSave.textContent   = 'Guardar Backtest';
+    if (liveQ)    liveQ.style.display    = 'none';
+    if (btNotes)  btNotes.style.display  = 'block';
+    if (btnSave)  btnSave.textContent    = 'Guardar Backtest';
+    // Mostrar smart dropdowns en backtesting
+    if (stratBT)   stratBT.style.display   = 'block';
+    if (stratLive) stratLive.style.display = 'none';
+    if (symBT)     symBT.style.display     = 'block';
+    if (symLive)   symLive.style.display   = 'none';
   }
 }
 
@@ -356,9 +372,80 @@ function renderEquityChart(series, canvasId) {
         y:{ticks:{color:'#888',font:{size:11},callback:v=>fmtPnl(v)},grid:{color:'#252525'}}}}});
 }
 
+// ── SMART DROPDOWNS (localStorage) ───────────────────────────────────────────
+const STORAGE_STRATEGIES = 'journal_strategies';
+const STORAGE_SYMBOLS    = 'journal_symbols';
+
+function getSavedList(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
+}
+function saveToList(key, value) {
+  if (!value || !value.trim()) return;
+  const list = getSavedList(key);
+  const clean = value.trim().toUpperCase();
+  if (!list.includes(clean)) {
+    list.unshift(clean);
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 30)));
+  }
+}
+function getLastUsed(key) {
+  const list = getSavedList(key);
+  return list.length > 0 ? list[0] : '';
+}
+
+function buildSmartDropdown(selectId, storageKey, placeholder) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const items = getSavedList(storageKey);
+  const lastUsed = items[0] || '';
+  sel.innerHTML = `<option value="">${placeholder}</option>`
+    + items.map(i => `<option value="${i}"${i===lastUsed?' selected':''}>${i}</option>`).join('')
+    + `<option value="__new__">+ Agregar nuevo...</option>`;
+  sel.value = lastUsed || '';
+  // Toggle new input
+  const newWrapId = selectId + '-new-wrap';
+  sel.onchange = () => {
+    const wrap = document.getElementById(newWrapId);
+    if (!wrap) return;
+    if (sel.value === '__new__') {
+      wrap.style.display = 'block';
+      wrap.querySelector('input').focus();
+    } else {
+      wrap.style.display = 'none';
+    }
+  };
+}
+
+function initBacktestFormDefaults() {
+  if (state.mode !== 'backtest') return;
+  // Estrategia
+  buildSmartDropdown('t-strategy-select', STORAGE_STRATEGIES, 'Seleccionar estrategia...');
+  // Símbolo
+  buildSmartDropdown('t-symbol-select', STORAGE_SYMBOLS, 'Seleccionar símbolo...');
+  // Kill Zone — New York por defecto
+  const kz = document.getElementById('t-kz');
+  if (kz && !kz.value) kz.value = 'New York';
+}
+
+function collectSmartField(formId, fieldName, selectId, newInputId, storageKey) {
+  const sel = document.getElementById(selectId);
+  const newInput = document.getElementById(newInputId);
+  let value = '';
+  if (sel && sel.value === '__new__') {
+    value = newInput ? newInput.value.trim().toUpperCase() : '';
+    if (value) saveToList(storageKey, value);
+  } else if (sel) {
+    value = sel.value;
+    if (value) saveToList(storageKey, value);
+  }
+  return value;
+}
+
 // ── TRADE FORM ────────────────────────────────────────────────────────────────
 function bindTradeForm() {
   const form=document.getElementById('trade-form');
+  // Inicializar dropdowns inteligentes solo en backtesting
+  initBacktestFormDefaults();
   // BE outcome toggle
   form.querySelectorAll('[name="result"]').forEach(radio=>{
     radio.addEventListener('change',()=>{
@@ -383,6 +470,8 @@ function bindTradeForm() {
       form.querySelectorAll('.radio-label input[name="side"]')[0].checked=true;
       form.querySelectorAll('.radio-label input[name="result"]')[0].checked=true;
       document.getElementById('be-outcome-section').style.display='none';
+      // Re-inicializar dropdowns después del reset
+      if(state.mode==='backtest') initBacktestFormDefaults();
       await loadData(); renderAll();
     } catch(err){errEl.textContent=err.message;}
   });
@@ -393,8 +482,17 @@ function collectTradeForm(formId) {
   const f=document.getElementById(formId);
   const v=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.value:'';};
   const r=name=>{const el=f.querySelector(`[name="${name}"]:checked`);return el?el.value:'';};
+  // Para backtesting, leer de smart dropdowns
+  let strategyName, symbol;
+  if(formId==='trade-form' && state.mode==='backtest') {
+    strategyName = collectSmartField(formId,'strategyName','t-strategy-select','t-strategy-new-input',STORAGE_STRATEGIES);
+    symbol       = collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS);
+  } else {
+    strategyName = v('strategyName');
+    symbol       = v('symbol');
+  }
   return {
-    strategyName:v('strategyName'),date:v('date'),symbol:v('symbol'),
+    strategyName, date:v('date'), symbol,
     killZone:v('killZone'),side:r('side'),result:r('result'),
     beOutcome:r('beOutcome'),
     pnl:v('pnl'),rrPlanned:v('rrPlanned'),tradingViewUrl:v('tradingViewUrl'),
