@@ -179,7 +179,14 @@
               <div class="radio-group">
                 <label class="radio-label tp"><input type="radio" name="result" value="TP" checked /> TP</label>
                 <label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label>
-                <label class="radio-label"><input type="radio" name="result" value="BE" /> BE</label>
+                <label class="radio-label be"><input type="radio" name="result" value="BE" /> BE</label>
+              </div>
+              <div id="be-outcome-section" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-left:3px solid var(--text-muted);border-radius:var(--radius);padding:10px 12px;">
+                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">¿Hacia dónde continuó el precio?</div>
+                <div class="radio-group">
+                  <label class="radio-label tp"><input type="radio" name="beOutcome" value="TP" /> Continuó a TP</label>
+                  <label class="radio-label sl"><input type="radio" name="beOutcome" value="SL" /> Continuó a SL</label>
+                </div>
               </div>
             </div>
           </div>
@@ -249,6 +256,9 @@
 
       <!-- Winners / Losers -->
       <div class="wl-grid" id="analytics-wl-grid"><!-- generado dinámicamente --></div>
+
+      <!-- BE Outcome -->
+      <div class="cards-grid" id="analytics-be-grid" style="margin-bottom:24px"><!-- generado dinámicamente --></div>
 
       <!-- Drawdown -->
       <div class="analytics-metrics-grid" id="analytics-dd-grid"><!-- generado dinámicamente --></div>
@@ -333,7 +343,17 @@
       </div>
       <div class="form-row form-row-2">
         <div><label class="form-label">Tipo *</label><div class="radio-group"><label class="radio-label buy"><input type="radio" name="side" value="BUY" /> BUY</label><label class="radio-label sell"><input type="radio" name="side" value="SELL" /> SELL</label></div></div>
-        <div><label class="form-label">Resultado *</label><div class="radio-group"><label class="radio-label tp"><input type="radio" name="result" value="TP" /> TP</label><label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label><label class="radio-label"><input type="radio" name="result" value="BE" /> BE</label></div></div>
+        <div>
+          <label class="form-label">Resultado *</label>
+          <div class="radio-group"><label class="radio-label tp"><input type="radio" name="result" value="TP" /> TP</label><label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label><label class="radio-label be"><input type="radio" name="result" value="BE" /> BE</label></div>
+          <div id="edit-be-outcome-section" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-left:3px solid var(--text-muted);border-radius:var(--radius);padding:10px 12px;">
+            <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">¿Hacia dónde continuó el precio?</div>
+            <div class="radio-group">
+              <label class="radio-label tp"><input type="radio" name="beOutcome" value="TP" /> Continuó a TP</label>
+              <label class="radio-label sl"><input type="radio" name="beOutcome" value="SL" /> Continuó a SL</label>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="form-row form-row-2">
         <div><label class="form-label">P&amp;L ($) *</label><input class="form-input" type="number" step="0.01" name="pnl" required /></div>
