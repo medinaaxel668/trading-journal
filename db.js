@@ -118,3 +118,74 @@ export async function addNote(data) {
 }
 
 export async function deleteNote(id) { await db.notes.delete(id); }
+// ── LIVE TRADES ──────────────────────────────────────────────────────────────
+export async function getAllLiveTrades() {
+  return db.liveTrades.orderBy('createdAt').toArray();
+}
+export async function addLiveTrade(data) {
+  const trade = {
+    id: uuid(), mode: 'live',
+    strategyName: String(data.strategyName).trim(),
+    date:         String(data.date).trim(),
+    symbol:       String(data.symbol).trim().toUpperCase(),
+    killZone:     String(data.killZone).trim(),
+    side:         String(data.side).trim().toUpperCase(),
+    result:       String(data.result).trim().toUpperCase(),
+    beOutcome:    data.result==='BE' ? (String(data.beOutcome||'').trim()||null) : null,
+    pnl:          Number(data.pnl),
+    rrPlanned:    data.rrPlanned!==''&&data.rrPlanned!==undefined ? Number(data.rrPlanned) : null,
+    tradingViewUrl: String(data.tradingViewUrl||'').trim(),
+    imageM3Url:   String(data.imageM3Url||'').trim(),
+    imageM15Url:  String(data.imageM15Url||'').trim(),
+    setup:        String(data.setup||'').trim(),
+    fomo:         String(data.fomo||'').trim(),
+    aprendizaje:  String(data.aprendizaje||'').trim(),
+    createdAt: nowISO(), updatedAt: nowISO()
+  };
+  validateTrade(trade);
+  await db.liveTrades.add(trade);
+  return trade;
+}
+export async function updateLiveTrade(id, data) {
+  const existing = await db.liveTrades.get(id);
+  if (!existing) throw new Error('Trade no encontrado');
+  const updated = {
+    ...existing,
+    strategyName: String(data.strategyName).trim(),
+    date:         String(data.date).trim(),
+    symbol:       String(data.symbol).trim().toUpperCase(),
+    killZone:     String(data.killZone).trim(),
+    side:         String(data.side).trim().toUpperCase(),
+    result:       String(data.result).trim().toUpperCase(),
+    beOutcome:    data.result==='BE' ? (String(data.beOutcome||'').trim()||null) : null,
+    pnl:          Number(data.pnl),
+    rrPlanned:    data.rrPlanned!==''&&data.rrPlanned!==undefined ? Number(data.rrPlanned) : null,
+    tradingViewUrl: String(data.tradingViewUrl||'').trim(),
+    imageM3Url:   String(data.imageM3Url||'').trim(),
+    imageM15Url:  String(data.imageM15Url||'').trim(),
+    setup:        String(data.setup||'').trim(),
+    fomo:         String(data.fomo||'').trim(),
+    aprendizaje:  String(data.aprendizaje||'').trim(),
+    updatedAt: nowISO()
+  };
+  validateTrade(updated);
+  await db.liveTrades.put(updated);
+  return updated;
+}
+export async function deleteLiveTrade(id) { await db.liveTrades.delete(id); }
+
+// ── LIVE NOTES ────────────────────────────────────────────────────────────────
+export async function getAllLiveNotes() {
+  return db.liveNotes.orderBy('createdAt').reverse().toArray();
+}
+export async function addLiveNote(data) {
+  const note = {
+    id: uuid(), text: String(data.text||'').trim(),
+    links: Array.isArray(data.links) ? data.links.filter(l=>l.trim()!=='') : [],
+    date: nowISO(), createdAt: nowISO(), updatedAt: nowISO()
+  };
+  if (!note.text) throw new Error('La nota no puede estar vacía');
+  await db.liveNotes.add(note);
+  return note;
+}
+export async function deleteLiveNote(id) { await db.liveNotes.delete(id); }
