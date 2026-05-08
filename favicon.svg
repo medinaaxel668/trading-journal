@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Fondo -->
+  <circle cx="32" cy="32" r="32" fill="#1a1a1a"/>
+  
+  <!-- Candlestick 1 (rojo/SL) -->
+  <line x1="18" y1="28" x2="18" y2="48" stroke="#ff4444" stroke-width="3"/>
+  <rect x="13" y="32" width="10" height="12" fill="#ff4444" stroke="#ff4444" stroke-width="1"/>
+  
+  <!-- Candlestick 2 (rojo/SL) -->
+  <line x1="32" y1="24" x2="32" y2="44" stroke="#ff4444" stroke-width="3"/>
+  <rect x="27" y="28" width="10" height="12" fill="#ff4444" stroke="#ff4444" stroke-width="1"/>
+  
+  <!-- Candlestick 3 (verde/TP) - más alto -->
+  <line x1="46" y1="16" x2="46" y2="44" stroke="#44ff44" stroke-width="3"/>
+  <rect x="41" y="20" width="10" height="20" fill="#44ff44" stroke="#44ff44" stroke-width="1"/>
+  
+  <!-- Flecha tendencia alcista -->
+  <polyline points="12,52 32,32 52,32" stroke="#ffcc00" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
