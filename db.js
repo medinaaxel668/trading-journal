@@ -3,6 +3,7 @@
 
 // ── Dexie desde archivo local lib/dexie.js (versión 4.4.2, controlada por vos) ──
 import Dexie from 'dexie';
+import dexieCloud from 'dexie-cloud-addon';
 
 const DB_NAME  = 'tradingAppDB';
 const CLOUD_URL = 'https://zs0gyiyrz.dexie.cloud';
@@ -12,9 +13,7 @@ export let db;
 export async function initDB() {
   let cloudAddon = null;
   try {
-    // dexie-cloud-addon debe importarse DESPUÉS de dexie, desde la misma fuente ESM
-    const mod = await import('dexie-cloud-addon');
-    cloudAddon = mod.default ?? mod;
+    cloudAddon = dexieCloud;
   } catch (e) {
     console.warn('[initDB] dexie-cloud-addon no disponible, modo local:', e.message);
   }
