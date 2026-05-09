@@ -1,9 +1,9 @@
-// db.js — Dexie schema, CRUD helpers, Dexie Cloud bootstrap
+import dexieCloud from './lib/dexie-cloud.js'// db.js — Dexie schema, CRUD helpers, Dexie Cloud bootstrap
 // IMPORTANTE: Este archivo usa ESM. app.js debe cargarse con type="module"
 
 // ── Dexie desde archivo local lib/dexie.js (versión 4.4.2, controlada por vos) ──
 import Dexie from './lib/dexie.js';
-import dexieCloud from './lib/dexie-cloud.js';
+// import dexieCloud from './lib/dexie-cloud.js';
 
 const DB_NAME  = 'tradingAppDB';
 const CLOUD_URL = 'https://zs0gyiyrz.dexie.cloud';
