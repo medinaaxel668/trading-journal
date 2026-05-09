@@ -123,7 +123,7 @@
 <div id="app-screen">
   <header>
     <div class="header-inner">
-      <span class="app-logo" onclick="goToModeScreen()">📈 Journal</span>
+      <span class="app-logo" onclick="goToModeScreen()" title="Volver al inicio">📈</span>
       <span id="current-mode-badge" class="mode-indicator"></span>
       <nav class="tabs" role="tablist">
         <button class="tab-btn active" data-tab="dashboard"  role="tab">Dashboard</button>
@@ -133,10 +133,9 @@
         <button class="tab-btn"        data-tab="notes"      role="tab">Notas</button>
       </nav>
       <div class="cloud-controls">
-        <span id="sync-status" class="sync-badge sync-offline">Offline</span>
+        <span id="sync-status" class="sync-badge sync-offline" title="Estado de sincronización">Offline</span>
         <button id="btn-cloud-login" class="btn-cloud" type="button" style="display:none">Sync / Login</button>
         <div id="cloud-user-wrap" style="display:none;align-items:center;gap:8px;">
-          <span id="cloud-user-email" class="cloud-email"></span>
           <button id="btn-cloud-logout" class="btn-cloud btn-cloud-out" type="button">Logout</button>
         </div>
       </div>

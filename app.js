@@ -100,10 +100,6 @@ function setupModeUI() {
   const stratLive = document.getElementById('strategy-live-field');
   const symBT     = document.getElementById('symbol-bt-field');
   const symLive   = document.getElementById('symbol-live-field');
-  const dateBT    = document.getElementById('date-bt-field');
-  const dateLive  = document.getElementById('date-live-field');
-  const kzBT      = document.getElementById('kz-bt-field');
-  const kzLive    = document.getElementById('kz-live-field');
 
   if (state.mode === 'live') {
     badge.textContent = '⚡ Live';
@@ -116,15 +112,6 @@ function setupModeUI() {
     if (stratLive) stratLive.style.display = 'block';
     if (symBT)     symBT.style.display     = 'none';
     if (symLive)   symLive.style.display   = 'block';
-    if (dateBT)    dateBT.style.display    = 'none';
-    if (dateLive)  dateLive.style.display  = 'block';
-    if (kzBT)      kzBT.style.display      = 'none';
-    if (kzLive)    kzLive.style.display    = 'block';
-    // Auto-llenar fecha con hoy en Live
-    const dateInput = document.getElementById('t-date-live');
-    if (dateInput && !dateInput.value) {
-      dateInput.value = new Date().toISOString().split('T')[0];
-    }
   } else {
     badge.textContent = '📊 Backtesting';
     badge.className   = 'mode-indicator badge-mode-bt';
@@ -136,10 +123,6 @@ function setupModeUI() {
     if (stratLive) stratLive.style.display = 'none';
     if (symBT)     symBT.style.display     = 'block';
     if (symLive)   symLive.style.display   = 'none';
-    if (dateBT)    dateBT.style.display    = 'block';
-    if (dateLive)  dateLive.style.display  = 'none';
-    if (kzBT)      kzBT.style.display      = 'block';
-    if (kzLive)    kzLive.style.display    = 'none';
   }
 }
 
@@ -392,8 +375,6 @@ function renderEquityChart(series, canvasId) {
 // ── SMART DROPDOWNS (localStorage) ───────────────────────────────────────────
 const STORAGE_STRATEGIES = 'journal_strategies';
 const STORAGE_SYMBOLS    = 'journal_symbols';
-const STORAGE_KILLZONES  = 'journal_killzones';
-const STORAGE_DATES      = 'journal_dates';
 
 function getSavedList(key) {
   try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
@@ -435,44 +416,15 @@ function buildSmartDropdown(selectId, storageKey, placeholder) {
   };
 }
 
-function buildKillZoneDropdown() {
-  const sel = document.getElementById('t-kz-select');
-  if (!sel) return;
-  const items = getSavedList(STORAGE_KILLZONES);
-  const lastUsed = items[0] || 'New York';
-  // Opciones fijas + últimas usadas
-  const fixedZones = ['Asia', 'London', 'New York'];
-  const options = fixedZones.map(z => ({ value: z, label: z, isUsed: items.includes(z) }))
-    .sort((a, b) => (b.isUsed ? 1 : 0) - (a.isUsed ? 1 : 0));
-  sel.innerHTML = `<option value="">Seleccionar...</option>`
-    + options.map(o => `<option value="${o.value}"${o.value===lastUsed?' selected':''}>${o.label}</option>`).join('');
-  sel.value = lastUsed;
-}
-
-function buildDateDropdown() {
-  const sel = document.getElementById('t-date-select');
-  if (!sel) return;
-  const items = getSavedList(STORAGE_DATES);
-  const lastUsed = items[0] || '';
-  sel.innerHTML = `<option value="">Seleccionar última fecha...</option>`
-    + items.map((d, i) => `<option value="${d}"${i===0?' selected':''}>${fmtDate(d)}</option>`).join('');
-  sel.value = lastUsed;
-  // Cambio en select rellena un input hidden para luego usar en collectTradeForm
-  sel.addEventListener('change', () => {
-    // Simplemente guardará el valor seleccionado
-  });
-}
-
 function initBacktestFormDefaults() {
   if (state.mode !== 'backtest') return;
   // Estrategia
   buildSmartDropdown('t-strategy-select', STORAGE_STRATEGIES, 'Seleccionar estrategia...');
   // Símbolo
   buildSmartDropdown('t-symbol-select', STORAGE_SYMBOLS, 'Seleccionar símbolo...');
-  // Kill Zone — última usada o New York por defecto
-  buildKillZoneDropdown();
-  // Fecha — últimas fechas usadas
-  buildDateDropdown();
+  // Kill Zone — New York por defecto
+  const kz = document.getElementById('t-kz');
+  if (kz && !kz.value) kz.value = 'New York';
 }
 
 function collectSmartField(formId, fieldName, selectId, newInputId, storageKey) {
@@ -518,12 +470,8 @@ function bindTradeForm() {
       form.querySelectorAll('.radio-label input[name="side"]')[0].checked=true;
       form.querySelectorAll('.radio-label input[name="result"]')[0].checked=true;
       document.getElementById('be-outcome-section').style.display='none';
-      // Re-inicializar dropdowns después del reset (BT) o restablecer hoy (Live)
+      // Re-inicializar dropdowns después del reset
       if(state.mode==='backtest') initBacktestFormDefaults();
-      else {
-        const dateInput = document.getElementById('t-date-live');
-        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
-      }
       await loadData(); renderAll();
     } catch(err){errEl.textContent=err.message;}
   });
@@ -535,29 +483,17 @@ function collectTradeForm(formId) {
   const v=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.value:'';};
   const r=name=>{const el=f.querySelector(`[name="${name}"]:checked`);return el?el.value:'';};
   // Para backtesting, leer de smart dropdowns
-  let strategyName, symbol, date, killZone;
+  let strategyName, symbol;
   if(formId==='trade-form' && state.mode==='backtest') {
     strategyName = collectSmartField(formId,'strategyName','t-strategy-select','t-strategy-new-input',STORAGE_STRATEGIES);
     symbol       = collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS);
-    // Fecha desde dropdown
-    const dateSelect = document.getElementById('t-date-select');
-    date = dateSelect ? dateSelect.value : '';
-    if (date) saveToList(STORAGE_DATES, date);
-    // Kill Zone desde dropdown
-    const kzSelect = document.getElementById('t-kz-select');
-    killZone = kzSelect ? kzSelect.value : '';
-    if (killZone) saveToList(STORAGE_KILLZONES, killZone);
   } else {
     strategyName = v('strategyName');
     symbol       = v('symbol');
-    date         = v('date');
-    killZone     = v('killZone');
-    // En live, guardar kill zone igualmente
-    if (killZone) saveToList(STORAGE_KILLZONES, killZone);
   }
   return {
-    strategyName, date, symbol,
-    killZone,side:r('side'),result:r('result'),
+    strategyName, date:v('date'), symbol,
+    killZone:v('killZone'),side:r('side'),result:r('result'),
     beOutcome:r('beOutcome'),
     pnl:v('pnl'),rrPlanned:v('rrPlanned'),tradingViewUrl:v('tradingViewUrl'),
     imageM3Url:v('imageM3Url'),imageM15Url:v('imageM15Url'),
@@ -1010,15 +946,13 @@ function bindCloudUI(){
     return;
   }
   try{db.cloud.syncState.subscribe(s=>{
-    const badge=document.getElementById('sync-status');if(!badge)return;
-    const ui=syncPhaseMap(s&&s.phase);badge.textContent=ui.text;badge.className='sync-badge '+ui.cls;
+    updateSyncBadge(s&&s.phase);
   });}catch(e){}
   try{db.cloud.currentUser.subscribe(user=>{
     const loginBtn=document.getElementById('btn-cloud-login');
     const userWrap=document.getElementById('cloud-user-wrap');
-    const emailEl=document.getElementById('cloud-user-email');
-    if(!loginBtn||!userWrap||!emailEl)return;
-    if(user&&user.isLoggedIn){loginBtn.style.display='none';userWrap.style.display='flex';emailEl.textContent=user.email||'Usuario';}
+    if(!loginBtn||!userWrap)return;
+    if(user&&user.isLoggedIn){loginBtn.style.display='none';userWrap.style.display='flex';}
     else{loginBtn.style.display='';userWrap.style.display='none';}
   });}catch(e){}
   const loginBtn=document.getElementById('btn-cloud-login');
@@ -1028,10 +962,22 @@ function bindCloudUI(){
 }
 
 function syncPhaseMap(phase){
-  if(!phase||['not-started','offline','disconnected','error'].includes(phase))return{text:'Offline',cls:'sync-offline'};
-  if(['connecting','pushing','pulling'].includes(phase))return{text:'Sincronizando...',cls:'sync-syncing'};
-  if(['in-sync','connected'].includes(phase))return{text:'Sincronizado',cls:'sync-ok'};
-  return{text:'Offline',cls:'sync-offline'};
+  if(!phase||['not-started','offline','disconnected','error'].includes(phase))return{text:'Offline',cls:'sync-offline',emoji:'🔴'};
+  if(['connecting','pushing','pulling'].includes(phase))return{text:'Sincronizando...',cls:'sync-syncing',emoji:'🟡'};
+  if(['in-sync','connected'].includes(phase))return{text:'Sincronizado',cls:'sync-ok',emoji:'🟢'};
+  return{text:'Offline',cls:'sync-offline',emoji:'🔴'};
+}
+
+function updateSyncBadge(phase) {
+  const badge = document.getElementById('sync-status');
+  if (!badge) return;
+  const ui = syncPhaseMap(phase);
+  const inApp = document.getElementById('app-screen')?.style.display !== 'none';
+  // En pantalla de inicio (mode-screen): mostrar texto
+  // En app: mostrar solo emoji
+  badge.textContent = inApp ? ui.emoji : ui.text;
+  badge.className = 'sync-badge ' + ui.cls;
+  badge.title = ui.text;
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
