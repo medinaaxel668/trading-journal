@@ -754,6 +754,25 @@ function renderAnalytics() {
   const beGrid=document.getElementById('analytics-be-grid');
   if(beGrid) beGrid.innerHTML='';
 
+  // SMT Card
+  const smtTrades = trades.filter(t => t.smt === true);
+  const smtMetrics = computeMetrics(smtTrades);
+  const smtGrid = document.getElementById('analytics-smt-grid');
+  if (smtGrid && smtTrades.length > 0) {
+    const smtWr = smtMetrics.winRate !== null ? fmtPct(smtMetrics.winRate) : 'N/A';
+    const smtPf = smtMetrics.profitFactor !== null ? smtMetrics.profitFactor.toFixed(2) : 'N/A';
+    const modeLabel = state.mode === 'live' ? 'SMT (Live)' : 'SMT (Backtest)';
+    smtGrid.innerHTML = `
+      <div class="card">
+        <div class="card-label">${modeLabel}</div>
+        <div class="card-value positive">${smtWr}</div>
+        <div class="card-sub">${smtPf} de ${smtTrades.length} Trades</div>
+      </div>
+    `;
+  } else if (smtGrid) {
+    smtGrid.innerHTML = '';
+  }
+
   // Drawdown
   const ddGrid=document.getElementById('analytics-dd-grid');
   if(ddGrid) ddGrid.innerHTML=[
