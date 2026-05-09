@@ -244,19 +244,25 @@
                 <label class="radio-label sell"><input type="radio" name="side" value="SELL" /> SELL</label>
               </div>
             </div>
-            <div>
-              <label class="form-label">Resultado *</label>
-              <div class="radio-group">
-                <label class="radio-label tp"><input type="radio" name="result" value="TP" checked /> TP</label>
-                <label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label>
-                <label class="radio-label be"><input type="radio" name="result" value="BE" /> BE</label>
+            <div style="display:flex;align-items:flex-end;gap:8px">
+              <div style="flex:1">
+                <label class="form-label">SMT</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" name="smt" /> Setup Management</label>
               </div>
-              <div id="be-outcome-section" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-left:3px solid var(--text-muted);border-radius:var(--radius);padding:10px 12px;">
-                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">¿Hacia dónde continuó el precio?</div>
+              <div style="flex:1">
+                <label class="form-label">Resultado *</label>
                 <div class="radio-group">
-                  <label class="radio-label tp"><input type="radio" name="beOutcome" value="TP" /> Continuó a TP</label>
-                  <label class="radio-label sl"><input type="radio" name="beOutcome" value="SL" /> Continuó a SL</label>
+                  <label class="radio-label tp"><input type="radio" name="result" value="TP" checked /> TP</label>
+                  <label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label>
+                  <label class="radio-label be"><input type="radio" name="result" value="BE" /> BE</label>
                 </div>
+              </div>
+            </div>
+            <div id="be-outcome-section" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-left:3px solid var(--text-muted);border-radius:var(--radius);padding:10px 12px;">
+              <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">¿Hacia dónde continuó el precio?</div>
+              <div class="radio-group">
+                <label class="radio-label tp"><input type="radio" name="beOutcome" value="TP" /> Continuó a TP</label>
+                <label class="radio-label sl"><input type="radio" name="beOutcome" value="SL" /> Continuó a SL</label>
               </div>
             </div>
           </div>

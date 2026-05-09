@@ -207,7 +207,7 @@ function renderModeStats() {
       db.cloud.syncState.subscribe(s => {
         const badge = document.getElementById('mode-sync-badge'); if(!badge)return;
         const ui = syncPhaseMap(s&&s.phase);
-        badge.textContent=ui.text; badge.className='sync-badge '+ui.cls;
+        badge.textContent=ui.text; badge.className='sync-badge '+ui.cls; badge.title=ui.text;
       });
       db.cloud.currentUser.subscribe(user => {
         const el = document.getElementById('mode-user-email');
@@ -482,6 +482,7 @@ function collectTradeForm(formId) {
   const f=document.getElementById(formId);
   const v=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.value:'';};
   const r=name=>{const el=f.querySelector(`[name="${name}"]:checked`);return el?el.value:'';};
+  const c=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.checked:false;};
   // Para backtesting, leer de smart dropdowns
   let strategyName, symbol;
   if(formId==='trade-form' && state.mode==='backtest') {
@@ -494,7 +495,7 @@ function collectTradeForm(formId) {
   return {
     strategyName, date:v('date'), symbol,
     killZone:v('killZone'),side:r('side'),result:r('result'),
-    beOutcome:r('beOutcome'),
+    beOutcome:r('beOutcome'),smt:c('smt'),
     pnl:v('pnl'),rrPlanned:v('rrPlanned'),tradingViewUrl:v('tradingViewUrl'),
     imageM3Url:v('imageM3Url'),imageM15Url:v('imageM15Url'),
     notes:v('notes'),setup:v('setup'),fomo:v('fomo'),aprendizaje:v('aprendizaje')
@@ -552,6 +553,7 @@ function buildTradeCard(t) {
   ].filter(Boolean).join('');
   const beTag = t.result==='BE'&&t.beOutcome
     ? `<span class="badge badge-be" style="font-size:.65rem">BE→${t.beOutcome}</span>` : '';
+  const smtTag = t.smt ? `<span class="badge" style="font-size:.65rem;background:rgba(100,200,255,.2);color:#64c8ff;border:1px solid rgba(100,200,255,.4)">SMT</span>` : '';
   return `
   <div class="trade-item">
     <div class="trade-item-header">
@@ -559,6 +561,7 @@ function buildTradeCard(t) {
       <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span>
       <span class="badge ${badgeResult(t.result)}">${t.result}</span>
       ${beTag}
+      ${smtTag}
       <span class="trade-pnl ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</span>
     </div>
     <div class="trade-meta">
@@ -612,6 +615,7 @@ function openDetailModal(id) {
     <div class="detail-row"><span class="detail-row-label">Kill Zone</span><span class="detail-row-value">${esc(t.killZone)}</span></div>
     <div class="detail-row"><span class="detail-row-label">Lado</span><span class="detail-row-value">${t.side==='BUY'?'BUY (Long)':'SELL (Short)'}</span></div>
     <div class="detail-row"><span class="detail-row-label">Resultado</span><span class="detail-row-value">${t.result}</span></div>
+    <div class="detail-row"><span class="detail-row-label">SMT</span><span class="detail-row-value">${t.smt?'✅ Sí':'—'}</span></div>
     ${beOutcomeRow}
     ${liveSection}
     ${links?`<div class="detail-section">Referencias</div><div class="detail-links">${links}</div>`:''}`;
