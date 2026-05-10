@@ -9,7 +9,8 @@ export let db;
 
 export async function initDB() {
   let cloudAddon = null;
-// dexieCloud deshabilitado
+  try {
+    cloudAddon = dexieCloud;
   } catch (e) {
     console.warn('[initDB] dexie-cloud-addon no disponible, modo local:', e.message);
   }
