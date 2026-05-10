@@ -375,6 +375,7 @@ function renderEquityChart(series, canvasId) {
 // ── SMART DROPDOWNS (localStorage) ───────────────────────────────────────────
 const STORAGE_STRATEGIES = 'journal_strategies';
 const STORAGE_SYMBOLS    = 'journal_symbols';
+const STORAGE_DATES      = 'journal_dates';
 
 function getSavedList(key) {
   try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
