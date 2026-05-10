@@ -415,6 +415,15 @@ function buildSmartDropdown(selectId, storageKey, placeholder) {
     }
   };
 }
+function buildDateDropdown() {
+  const sel = document.getElementById('t-date-select');
+  if (!sel) return;
+  const items = getSavedList(STORAGE_DATES);
+  const lastUsed = items[0] || '';
+  sel.innerHTML = `<option value="">Seleccionar última fecha...</option>`
+    + items.map((d, i) => `<option value="${d}"${i===0?' selected':''}>${fmtDate(d)}</option>`).join('');
+  sel.value = lastUsed;
+}
 
 function initBacktestFormDefaults() {
   if (state.mode !== 'backtest') return;
@@ -423,6 +432,7 @@ function initBacktestFormDefaults() {
   // Símbolo
   buildSmartDropdown('t-symbol-select', STORAGE_SYMBOLS, 'Seleccionar símbolo...');
   // Kill Zone — New York por defecto
+  buildDateDropdown();
   const kz = document.getElementById('t-kz');
   if (kz && !kz.value) kz.value = 'New York';
 }
