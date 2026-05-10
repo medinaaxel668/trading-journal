@@ -95,7 +95,6 @@ function setupModeUI() {
   const liveQ   = document.getElementById('live-questions-section');
   const btNotes = document.getElementById('backtest-notes-section');
   const btnSave = document.getElementById('btn-save-trade');
-  // Smart dropdown fields
   const stratBT   = document.getElementById('strategy-bt-field');
   const stratLive = document.getElementById('strategy-live-field');
   const symBT     = document.getElementById('symbol-bt-field');
@@ -107,18 +106,21 @@ function setupModeUI() {
     if (liveQ)    liveQ.style.display    = 'block';
     if (btNotes)  btNotes.style.display  = 'none';
     if (btnSave)  btnSave.textContent    = 'Guardar Trade en Vivo';
-    // Mostrar inputs normales en live
     if (stratBT)   stratBT.style.display   = 'none';
     if (stratLive) stratLive.style.display = 'block';
     if (symBT)     symBT.style.display     = 'none';
     if (symLive)   symLive.style.display   = 'block';
+    // Auto-rellenar fecha con hoy en Live
+    const dateInput = document.getElementById('t-date');
+    if (dateInput && !dateInput.value) {
+      dateInput.value = new Date().toISOString().split('T')[0];
+    }
   } else {
     badge.textContent = '📊 Backtesting';
     badge.className   = 'mode-indicator badge-mode-bt';
     if (liveQ)    liveQ.style.display    = 'none';
     if (btNotes)  btNotes.style.display  = 'block';
     if (btnSave)  btnSave.textContent    = 'Guardar Backtest';
-    // Mostrar smart dropdowns en backtesting
     if (stratBT)   stratBT.style.display   = 'block';
     if (stratLive) stratLive.style.display = 'none';
     if (symBT)     symBT.style.display     = 'block';
@@ -428,12 +430,9 @@ function buildDateDropdown() {
 
 function initBacktestFormDefaults() {
   if (state.mode !== 'backtest') return;
-  // Estrategia
   buildSmartDropdown('t-strategy-select', STORAGE_STRATEGIES, 'Seleccionar estrategia...');
-  // Símbolo
   buildSmartDropdown('t-symbol-select', STORAGE_SYMBOLS, 'Seleccionar símbolo...');
   // Kill Zone — New York por defecto
-  buildDateDropdown();
   const kz = document.getElementById('t-kz');
   if (kz && !kz.value) kz.value = 'New York';
 }

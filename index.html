@@ -187,17 +187,10 @@
             <input class="form-input" type="text" name="strategyName" placeholder="p.ej. ICT BMS + FVG" />
           </div>
           <div class="form-row form-row-3">
-            <!-- Fecha: BT con dropdown, Live con auto-hoy -->
-            <div id="date-bt-field">
-              <label class="form-label" for="t-date-bt">Fecha *</label>
-              <select id="t-date-select" name="date" class="form-select">
-                <option value="">Seleccionar última fecha...</option>
-                <option value="2024-01-15">2024-01-15</option>
-              </select>
-            </div>
-            <div id="date-live-field" style="display:none">
-              <label class="form-label" for="t-date-live">Fecha *</label>
-              <input id="t-date-live" class="form-input" type="date" name="date" required />
+            <!-- Fecha: input date simple en ambos modos -->
+            <div>
+              <label class="form-label">Fecha *</label>
+              <input id="t-date" class="form-input" type="date" name="date" required />
             </div>
             <div id="symbol-bt-field">
               <label class="form-label">Símbolo *</label>
@@ -216,24 +209,14 @@
               <label class="form-label">Símbolo *</label>
               <input class="form-input" type="text" name="symbol" placeholder="EURUSD" />
             </div>
-            <!-- Kill Zone: smart dropdown en BT, normal en Live -->
-            <div id="kz-bt-field">
+            <!-- Kill Zone: select simple en ambos modos -->
+            <div>
               <label class="form-label">Kill Zone *</label>
-              <select id="t-kz-select" class="form-select" style="appearance:none;padding-right:28px">
+              <select id="t-kz" class="form-select" name="killZone" required>
                 <option value="">Seleccionar...</option>
-                  <option value="New York">New York</option>
-                 <option value="London">London</option>
-                  <option value="Asia">Asia</option>
-              </select>
-              <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:10px">▼</span>
-            </div>
-            <div id="kz-live-field" style="display:none">
-              <label class="form-label">Kill Zone *</label>
-              <select id="t-kz-live" class="form-select" name="killZone" required>
-                <option value="">Seleccionar...</option>
-                <option value="Asia">Asia</option>
-                <option value="London">London</option>
                 <option value="New York">New York</option>
+                <option value="London">London</option>
+                <option value="Asia">Asia</option>
               </select>
             </div>
           </div>
