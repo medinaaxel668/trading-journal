@@ -1,4 +1,5 @@
 import Dexie from './lib/dexie.js';
+import dexieCloud from './lib/dexie-cloud.js';
 
 const DB_NAME  = 'tradingAppDB';
 const CLOUD_URL = 'https://zs0gyiyrz.dexie.cloud';
