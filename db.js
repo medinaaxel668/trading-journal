@@ -1,4 +1,4 @@
-import dexieCloud from './lib/dexie-cloud.js'// db.js — Dexie schema, CRUD helpers, Dexie Cloud bootstra// IMPORTANTE: Este archivo usa ESM. app.js debe cargarse con type="module"
+
 
 // import dexieCloud from './lib/dexie-cloud.js';
 
