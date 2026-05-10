@@ -1,8 +1,5 @@
-import dexieCloud from './lib/dexie-cloud.js'// db.js — Dexie schema, CRUD helpers, Dexie Cloud bootstrap
-// IMPORTANTE: Este archivo usa ESM. app.js debe cargarse con type="module"
+import dexieCloud from './lib/dexie-cloud.js'// db.js — Dexie schema, CRUD helpers, Dexie Cloud bootstra// IMPORTANTE: Este archivo usa ESM. app.js debe cargarse con type="module"
 
-// ── Dexie desde archivo local lib/dexie.js (versión 4.4.2, controlada por vos) ──
-import Dexie from './lib/dexie.js';
 // import dexieCloud from './lib/dexie-cloud.js';
 
 const DB_NAME  = 'tradingAppDB';
@@ -12,8 +9,7 @@ export let db;
 
 export async function initDB() {
   let cloudAddon = null;
-  try {
-    cloudAddon = dexieCloud;
+// dexieCloud deshabilitado
   } catch (e) {
     console.warn('[initDB] dexie-cloud-addon no disponible, modo local:', e.message);
   }
