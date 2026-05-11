@@ -106,10 +106,11 @@ function setupModeUI() {
     if (liveQ)    liveQ.style.display    = 'block';
     if (btNotes)  btNotes.style.display  = 'none';
     if (btnSave)  btnSave.textContent    = 'Guardar Trade en Vivo';
-    if (stratBT)   stratBT.style.display   = 'none';
-    if (stratLive) stratLive.style.display = 'block';
-    if (symBT)     symBT.style.display     = 'none';
-    if (symLive)   symLive.style.display   = 'block';
+    // Live también usa smart dropdowns (misma lógica que backtesting)
+    if (stratBT)   stratBT.style.display   = 'block';
+    if (stratLive) stratLive.style.display = 'none';
+    if (symBT)     symBT.style.display     = 'block';
+    if (symLive)   symLive.style.display   = 'none';
     // Auto-rellenar fecha con hoy en Live
     const dateInput = document.getElementById('t-date');
     if (dateInput && !dateInput.value) {
@@ -396,6 +397,12 @@ function getLastUsed(key) {
   return list.length > 0 ? list[0] : '';
 }
 
+function removeFromList(key, value) {
+  const list = getSavedList(key);
+  const filtered = list.filter(i => i !== value);
+  localStorage.setItem(key, JSON.stringify(filtered));
+}
+
 function buildSmartDropdown(selectId, storageKey, placeholder) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
@@ -417,6 +424,35 @@ function buildSmartDropdown(selectId, storageKey, placeholder) {
       wrap.style.display = 'none';
     }
   };
+  // Render delete buttons list below the select
+  renderDeleteList(selectId, storageKey, placeholder);
+}
+
+function renderDeleteList(selectId, storageKey, placeholder) {
+  const listId = selectId + '-delete-list';
+  let listEl = document.getElementById(listId);
+  if (!listEl) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    listEl = document.createElement('div');
+    listEl.id = listId;
+    listEl.style.cssText = 'margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;';
+    // Insert after the select's parent wrapper (the relative div)
+    sel.parentNode.insertAdjacentElement('afterend', listEl);
+  }
+  const items = getSavedList(storageKey);
+  listEl.innerHTML = items.map(i => `
+    <span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-input,#1a1a1a);border:1px solid var(--border,#333);border-radius:4px;padding:2px 8px 2px 10px;font-size:.75rem;color:var(--text-muted,#888)">
+      ${esc(i)}
+      <button type="button" data-key="${esc(storageKey)}" data-val="${esc(i)}" data-select="${esc(selectId)}"
+        style="background:none;border:none;color:var(--red,#f44336);cursor:pointer;font-size:.85rem;padding:0 2px;line-height:1" title="Eliminar ${esc(i)}">×</button>
+    </span>`).join('');
+  listEl.querySelectorAll('button[data-val]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      removeFromList(btn.dataset.key, btn.dataset.val);
+      buildSmartDropdown(btn.dataset.select, btn.dataset.key, placeholder);
+    });
+  });
 }
 function buildDateDropdown() {
   const sel = document.getElementById('t-date-select');
@@ -429,7 +465,6 @@ function buildDateDropdown() {
 }
 
 function initBacktestFormDefaults() {
-  if (state.mode !== 'backtest') return;
   buildSmartDropdown('t-strategy-select', STORAGE_STRATEGIES, 'Seleccionar estrategia...');
   buildSmartDropdown('t-symbol-select', STORAGE_SYMBOLS, 'Seleccionar símbolo...');
   // Kill Zone — New York por defecto
@@ -492,9 +527,9 @@ function collectTradeForm(formId) {
   const f=document.getElementById(formId);
   const v=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.value:'';};
   const r=name=>{const el=f.querySelector(`[name="${name}"]:checked`);return el?el.value:'';};
-  // Para backtesting, leer de smart dropdowns
+  // Para ambos modos, leer de smart dropdowns
   let strategyName, symbol;
-  if(formId==='trade-form' && state.mode==='backtest') {
+  if(formId==='trade-form') {
     strategyName = collectSmartField(formId,'strategyName','t-strategy-select','t-strategy-new-input',STORAGE_STRATEGIES);
     symbol       = collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS);
   } else {
@@ -720,7 +755,7 @@ function renderAnalytics() {
   const trades=state.analyticsStrategy?state.trades.filter(t=>t.strategyName===state.analyticsStrategy):state.trades;
   const m=computeMetrics(trades);
 
-  // Métricas clave
+  // ── Fila 1: métricas clave (P&L, WR, PF, EV, RR, Mejor Trade, Peor Trade)
   const mg=document.getElementById('analytics-metrics-grid');
   if(mg) mg.innerHTML=[
     metricCard('P&L Total',fmtPnl(m.totalPnl),colorClass(m.totalPnl),null,'Suma total de ganancias y pérdidas de todos los trades.'),
@@ -730,7 +765,6 @@ function renderAnalytics() {
     metricCard('RR Prom. Real',m.avgRR!==null?m.avgRR.toFixed(2):'N/A','neutral','planificado','Risk/Reward promedio planificado. Si es menor al ideal, revisá tu gestión de salidas.'),
     metricCard('Mejor Trade',m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A','positive',null,'El trade individual con mayor ganancia.'),
     metricCard('Peor Trade',m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A','negative',null,'El trade individual con mayor pérdida.'),
-    metricCard('Total Trades',m.totalCount,'neutral',`${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`,'Total de trades registrados.'),
     // BE outcome cards inline con las métricas
     ...(m.bes.length > 0 ? [
       metricCard('BE → Continuó a TP', m.beToTP, 'positive',
@@ -742,9 +776,11 @@ function renderAnalytics() {
     ] : []),
   ].join('');
 
-  // Winners / Losers
+  // ── Winners / Losers (con espaciado corregido — margin-bottom igual al de arriba)
   const wlGrid=document.getElementById('analytics-wl-grid');
-  if(wlGrid) wlGrid.innerHTML=`
+  if(wlGrid) {
+    wlGrid.style.marginBottom='24px';
+    wlGrid.innerHTML=`
     <div class="wl-card">
       <div class="wl-title" style="color:var(--green)">✅ Ganadores</div>
       <div class="wl-row"><span class="wl-key">Total</span><span class="wl-val">${m.wins.length}</span></div>
@@ -759,42 +795,36 @@ function renderAnalytics() {
       <div class="wl-row"><span class="wl-key">Promedio pérdida</span><span class="wl-val negative">${m.avgLoss>0?'-'+m.avgLoss.toFixed(2)+' $':'—'}</span></div>
       <div class="wl-row"><span class="wl-key">Racha máx. perdedora</span><span class="wl-val">${m.worstStreak}</span></div>
     </div>`;
-
-  // BE outcome cards van inline en analytics-metrics-grid (ver arriba)
-  const beGrid=document.getElementById('analytics-be-grid');
-  if(beGrid) beGrid.innerHTML='';
-
-  // SMT Card
-  const smtTrades = trades.filter(t => t.smt === true);
-  const smtMetrics = computeMetrics(smtTrades);
-  const smtGrid = document.getElementById('analytics-smt-grid');
-  if (smtGrid && smtTrades.length > 0) {
-    const smtWr = smtMetrics.winRate !== null ? fmtPct(smtMetrics.winRate) : 'N/A';
-    const smtPf = smtMetrics.profitFactor !== null ? smtMetrics.profitFactor.toFixed(2) : 'N/A';
-    const modeLabel = state.mode === 'live' ? 'SMT (Live)' : 'SMT (Backtest)';
-    smtGrid.innerHTML = `
-      <div class="card">
-        <div class="card-label">${modeLabel}</div>
-        <div class="card-value positive">${smtWr}</div>
-        <div class="card-sub">${smtPf} de ${smtTrades.length} Trades</div>
-      </div>
-    `;
-  } else if (smtGrid) {
-    smtGrid.innerHTML = '';
   }
 
-  // Drawdown
+  // BE y SMT grids — limpiar (ya están integrados arriba)
+  const beGrid=document.getElementById('analytics-be-grid');
+  if(beGrid) beGrid.innerHTML='';
+  const smtGrid=document.getElementById('analytics-smt-grid');
+  if(smtGrid) smtGrid.innerHTML='';
+
+  // ── Fila 2 (dd-grid): Mejor Racha · Peor Racha · Total Trades · Max Drawdown
   const ddGrid=document.getElementById('analytics-dd-grid');
   if(ddGrid) ddGrid.innerHTML=[
-    metricCard('Max Drawdown',m.maxDD!==0?fmtPnl(m.maxDD):'—',m.maxDD<0?'negative':'neutral',null,'La mayor caída acumulada desde un pico hasta el punto más bajo.'),
-    metricCard('Tiempo Recuperación',m.avgDD>0?m.avgDD.toFixed(1)+' días':'—','neutral',null,'Días promedio que tardó tu cuenta en recuperarse luego de cada drawdown.'),
-    metricCard('Frecuencia DD',m.ddCount,'neutral','veces','Cuántas veces tu cuenta entró en drawdown.'),
     metricCard('Mejor Racha',m.bestStreak,'positive','TPs consecutivos','Mayor cantidad de trades ganadores consecutivos.'),
+    metricCard('Peor Racha',m.worstStreak,'negative','SLs consecutivos','Mayor cantidad de trades perdedores consecutivos.'),
+    metricCard('Total Trades',m.totalCount,'neutral',`${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`,'Total de trades registrados.'),
+    metricCard('Max Drawdown',m.maxDD!==0?fmtPnl(m.maxDD):'—',m.maxDD<0?'negative':'neutral',null,'La mayor caída acumulada desde un pico hasta el punto más bajo.'),
   ].join('');
 
-  // Frecuencia
+  // ── Frecuencia (freq-grid): SMT · Tiempo Rec. · Frecuencia DD + freq cards
+  const smtTrades = trades.filter(t => t.smt === true);
+  const smtMetrics = computeMetrics(smtTrades);
+  const modeLabel = state.mode === 'live' ? 'SMT (Live)' : 'SMT (Backtest)';
+  const smtWr = smtTrades.length > 0 && smtMetrics.winRate !== null ? fmtPct(smtMetrics.winRate) : 'N/A';
+  const smtPf = smtTrades.length > 0 && smtMetrics.profitFactor !== null ? smtMetrics.profitFactor.toFixed(2) : '—';
+  const smtSub = smtTrades.length > 0 ? `${smtPf} PF · ${smtTrades.length} trades` : 'Sin datos SMT';
+
   const freqGrid=document.getElementById('analytics-freq-grid');
   if(freqGrid) freqGrid.innerHTML=`
+    <div class="freq-card"><div class="freq-label">${modeLabel}</div><div class="freq-value ${smtTrades.length>0?colorClass(smtMetrics.winRate!==null?smtMetrics.winRate-.5:0):'neutral'}">${smtWr}</div><div class="freq-label" style="margin-top:2px">${smtSub}</div></div>
+    <div class="freq-card"><div class="freq-label">Tiempo Recuperación</div><div class="freq-value">${m.avgDD>0?m.avgDD.toFixed(1)+' días':'—'}</div></div>
+    <div class="freq-card"><div class="freq-label">Frecuencia DD</div><div class="freq-value">${m.ddCount} veces</div></div>
     <div class="freq-card"><div class="freq-label">Trades / día (prom.)</div><div class="freq-value">${m.tradesPerDay.toFixed(1)}</div></div>
     <div class="freq-card"><div class="freq-label">Trades / semana (prom.)</div><div class="freq-value">${m.tradesPerWeek.toFixed(1)}</div></div>
     <div class="freq-card"><div class="freq-label">Trades / mes (prom.)</div><div class="freq-value">${m.tradesPerMonth.toFixed(1)}</div></div>`;
@@ -806,6 +836,7 @@ function renderAnalytics() {
   renderEquityChart(equitySeries(trades),'chart-equity-analytics');
   renderPerfCalendar(trades);
 }
+
 
 function metricCard(label,value,cls,sub,tooltip){
   return `<div class="card">
