@@ -5,9 +5,9 @@
 :root {
   --bg-deep:    #0d0d0d;
   --bg-main:    #1a1a1a;
-  --bg-card:    #1e1e1e;
-  --bg-input:   #252525;
-  --border:     #2e2e2e;
+  --bg-card:    rgba(30, 30, 30, 0.8);
+  --bg-input:   rgba(37, 37, 37, 0.9);
+  --border:     rgba(255, 255, 255, 0.1);
   --text:       #f0f0f0;
   --text-muted: #888;
   --green:      #4caf50;
@@ -305,10 +305,28 @@ header {
 }
 .card {
   background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 18px 16px;
   box-shadow: var(--shadow);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+}
+.card:active { cursor: grabbing; }
+.card:hover {
+  border-color: rgba(240, 165, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(-4px);
+}
+.card.dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+  border: 2px dashed var(--gold);
+  z-index: 1000;
 }
 .card-label {
   font-size: .72rem;
@@ -606,7 +624,31 @@ header {
 
 /* Freq cards */
 .freq-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 24px; }
-.freq-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; text-align: center; box-shadow: var(--shadow); }
+.freq-card { 
+  background: var(--bg-card); 
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border); 
+  border-radius: var(--radius-lg); 
+  padding: 14px 16px; 
+  text-align: center; 
+  box-shadow: var(--shadow);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
+  cursor: grab;
+  user-select: none;
+}
+.freq-card:active { cursor: grabbing; }
+.freq-card:hover {
+  border-color: rgba(240, 165, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(-4px);
+}
+.freq-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+  border: 2px dashed var(--gold);
+  z-index: 1000;
+}
 .freq-label { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
 .freq-value { font-size: 1.5rem; font-weight: 700; }
 

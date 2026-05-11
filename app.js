@@ -755,28 +755,42 @@ function renderAnalytics() {
   const trades=state.analyticsStrategy?state.trades.filter(t=>t.strategyName===state.analyticsStrategy):state.trades;
   const m=computeMetrics(trades);
 
-  // ── Fila 1: métricas clave (P&L, WR, PF, EV, RR, Mejor Trade, Peor Trade)
-  const mg=document.getElementById('analytics-metrics-grid');
-  if(mg) mg.innerHTML=[
-    metricCard('P&L Total',fmtPnl(m.totalPnl),colorClass(m.totalPnl),null,'Suma total de ganancias y pérdidas de todos los trades.'),
-    metricCard('Win Rate',m.winRate!==null?fmtPct(m.winRate):'N/A',m.winRate!==null?colorClass(m.winRate-.5):'neutral','excl. BE','Porcentaje de trades ganadores sobre decisivos (TP+SL). Los BE no entran en el cálculo.'),
-    metricCard('Profit Factor',m.profitFactor!==null?m.profitFactor.toFixed(2):'N/A',m.profitFactor!==null?colorClass(m.profitFactor-1):'neutral',null,'Divide el total de ganancias entre el total de pérdidas. Mayor a 1 = sistema rentable.'),
-    metricCard('Expected Value',m.ev!==null?fmtPnl(m.ev):'N/A',m.ev!==null?colorClass(m.ev):'neutral','excl. BE','Resultado promedio esperado por trade. Positivo = sistema con ventaja estadística.'),
-    metricCard('RR Prom. Real',m.avgRR!==null?m.avgRR.toFixed(2):'N/A','neutral','planificado','Risk/Reward promedio planificado. Si es menor al ideal, revisá tu gestión de salidas.'),
-    metricCard('Mejor Trade',m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A','positive',null,'El trade individual con mayor ganancia.'),
-    metricCard('Peor Trade',m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A','negative',null,'El trade individual con mayor pérdida.'),
-    // BE outcome cards inline con las métricas
-    ...(m.bes.length > 0 ? [
-      metricCard('BE → Continuó a TP', m.beToTP, 'positive',
-        `${m.bes.length>0?Math.round(m.beToTP/m.bes.length*100):0}% de ${m.bes.length} BE`,
-        'Breakevens donde el precio continuó hacia el TP después de sacarte. El mercado validó tu dirección.'),
-      metricCard('BE → Continuó a SL', m.beToSL, 'negative',
-        `${m.bes.length>0?Math.round(m.beToSL/m.bes.length*100):0}% de ${m.bes.length} BE`,
-        'Breakevens donde el precio fue al SL después de sacarte. El BE te protegió de una pérdida.'),
-    ] : []),
-  ].join('');
+  // ── MAPPING DE CARTAS ──
+  const cardDefs = {
+    'pnl':       () => metricCard('pnl', 'P&L Total', fmtPnl(m.totalPnl), colorClass(m.totalPnl), null, 'Suma total de ganancias y pérdidas de todos los trades.'),
+    'wr':        () => metricCard('wr', 'Win Rate', m.winRate!==null?fmtPct(m.winRate):'N/A', m.winRate!==null?colorClass(m.winRate-.5):'neutral', 'excl. BE', 'Porcentaje de trades ganadores sobre decisivos (TP+SL). Los BE no entran en el cálculo.'),
+    'pf':        () => metricCard('pf', 'Profit Factor', m.profitFactor!==null?m.profitFactor.toFixed(2):'N/A', m.profitFactor!==null?colorClass(m.profitFactor-1):'neutral', null, 'Divide el total de ganancias entre el total de pérdidas. Mayor a 1 = sistema rentable.'),
+    'ev':        () => metricCard('ev', 'Expected Value', m.ev!==null?fmtPnl(m.ev):'N/A', m.ev!==null?colorClass(m.ev):'neutral', 'excl. BE', 'Resultado promedio esperado por trade. Positivo = sistema con ventaja estadística.'),
+    'rr':        () => metricCard('rr', 'RR Prom. Real', m.avgRR!==null?m.avgRR.toFixed(2):'N/A', 'neutral', 'planificado', 'Risk/Reward promedio planificado. Si es menor al ideal, revisá tu gestión de salidas.'),
+    'best':      () => metricCard('best', 'Mejor Trade', m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A', 'positive', null, 'El trade individual con mayor ganancia.'),
+    'worst':     () => metricCard('worst', 'Peor Trade', m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A', 'negative', null, 'El trade individual con mayor pérdida.'),
+    'be-tp':     () => metricCard('be-tp', 'BE → Continuó a TP', m.beToTP, 'positive', `${m.bes.length>0?Math.round(m.beToTP/m.bes.length*100):0}% de ${m.bes.length} BE`, 'Breakevens donde el precio continuó hacia el TP después de sacarte.'),
+    'be-sl':     () => metricCard('be-sl', 'BE → Continuó a SL', m.beToSL, 'negative', `${m.bes.length>0?Math.round(m.beToSL/m.bes.length*100):0}% de ${m.bes.length} BE`, 'Breakevens donde el precio fue al SL después de sacarte.'),
+    'streak-b':  () => metricCard('streak-b', 'Mejor Racha', m.bestStreak, 'positive', 'TPs consecutivos', 'Mayor cantidad de trades ganadores consecutivos.'),
+    'streak-w':  () => metricCard('streak-w', 'Peor Racha', m.worstStreak, 'negative', 'SLs consecutivos', 'Mayor cantidad de trades perdedores consecutivos.'),
+    'total':     () => metricCard('total', 'Total Trades', m.totalCount, 'neutral', `${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`, 'Total de trades registrados.'),
+    'dd':        () => metricCard('dd', 'Max Drawdown', m.maxDD!==0?fmtPnl(m.maxDD):'—', m.maxDD<0?'negative':'neutral', null, 'La mayor caída acumulada desde un pico hasta el punto más bajo.')
+  };
 
-  // ── Winners / Losers (con espaciado corregido — margin-bottom igual al de arriba)
+  // ── ORDENAMIENTO (localStorage) ──
+  const STORAGE_ORDER = 'journal_analytics_order_v2';
+  const defaultOrder = ['pnl','wr','pf','ev','rr','best','worst','be-tp','be-sl','streak-b','streak-w','total','dd'];
+  let savedOrder = JSON.parse(localStorage.getItem(STORAGE_ORDER) || 'null');
+  if(!savedOrder) savedOrder = defaultOrder;
+
+  // Filtrar cartas que no tengan datos (ej: BE si no hay BEs)
+  const activeOrder = savedOrder.filter(id => {
+    if(id==='be-tp' || id==='be-sl') return m.bes.length > 0;
+    return true;
+  });
+
+  const mg=document.getElementById('analytics-metrics-grid');
+  if(mg) {
+    mg.innerHTML = activeOrder.map(id => cardDefs[id] ? cardDefs[id]() : '').join('');
+    initDraggableGrid(mg, STORAGE_ORDER);
+  }
+
+  // ── Winners / Losers
   const wlGrid=document.getElementById('analytics-wl-grid');
   if(wlGrid) {
     wlGrid.style.marginBottom='24px';
@@ -797,22 +811,7 @@ function renderAnalytics() {
     </div>`;
   }
 
-  // BE y SMT grids — limpiar (ya están integrados arriba)
-  const beGrid=document.getElementById('analytics-be-grid');
-  if(beGrid) beGrid.innerHTML='';
-  const smtGrid=document.getElementById('analytics-smt-grid');
-  if(smtGrid) smtGrid.innerHTML='';
-
-  // ── Fila 2 (dd-grid): Mejor Racha · Peor Racha · Total Trades · Max Drawdown
-  const ddGrid=document.getElementById('analytics-dd-grid');
-  if(ddGrid) ddGrid.innerHTML=[
-    metricCard('Mejor Racha',m.bestStreak,'positive','TPs consecutivos','Mayor cantidad de trades ganadores consecutivos.'),
-    metricCard('Peor Racha',m.worstStreak,'negative','SLs consecutivos','Mayor cantidad de trades perdedores consecutivos.'),
-    metricCard('Total Trades',m.totalCount,'neutral',`${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`,'Total de trades registrados.'),
-    metricCard('Max Drawdown',m.maxDD!==0?fmtPnl(m.maxDD):'—',m.maxDD<0?'negative':'neutral',null,'La mayor caída acumulada desde un pico hasta el punto más bajo.'),
-  ].join('');
-
-  // ── Frecuencia (freq-grid): SMT · Tiempo Rec. · Frecuencia DD + freq cards
+  // ── Frecuencia (freq-grid)
   const smtTrades = trades.filter(t => t.smt === true);
   const smtMetrics = computeMetrics(smtTrades);
   const modeLabel = state.mode === 'live' ? 'SMT (Live)' : 'SMT (Backtest)';
@@ -821,13 +820,16 @@ function renderAnalytics() {
   const smtSub = smtTrades.length > 0 ? `${smtPf} PF · ${smtTrades.length} trades` : 'Sin datos SMT';
 
   const freqGrid=document.getElementById('analytics-freq-grid');
-  if(freqGrid) freqGrid.innerHTML=`
-    <div class="freq-card"><div class="freq-label">${modeLabel}</div><div class="freq-value ${smtTrades.length>0?colorClass(smtMetrics.winRate!==null?smtMetrics.winRate-.5:0):'neutral'}">${smtWr}</div><div class="freq-label" style="margin-top:2px">${smtSub}</div></div>
-    <div class="freq-card"><div class="freq-label">Tiempo Recuperación</div><div class="freq-value">${m.avgDD>0?m.avgDD.toFixed(1)+' días':'—'}</div></div>
-    <div class="freq-card"><div class="freq-label">Frecuencia DD</div><div class="freq-value">${m.ddCount} veces</div></div>
-    <div class="freq-card"><div class="freq-label">Trades / día (prom.)</div><div class="freq-value">${m.tradesPerDay.toFixed(1)}</div></div>
-    <div class="freq-card"><div class="freq-label">Trades / semana (prom.)</div><div class="freq-value">${m.tradesPerWeek.toFixed(1)}</div></div>
-    <div class="freq-card"><div class="freq-label">Trades / mes (prom.)</div><div class="freq-value">${m.tradesPerMonth.toFixed(1)}</div></div>`;
+  if(freqGrid) {
+    freqGrid.innerHTML=`
+      <div class="freq-card" draggable="true" data-id="smt"><div class="freq-label">${modeLabel}</div><div class="freq-value ${smtTrades.length>0?colorClass(smtMetrics.winRate!==null?smtMetrics.winRate-.5:0):'neutral'}">${smtWr}</div><div class="freq-label" style="margin-top:2px">${smtSub}</div></div>
+      <div class="freq-card" draggable="true" data-id="time-rec"><div class="freq-label">Tiempo Recuperación</div><div class="freq-value">${m.avgDD>0?m.avgDD.toFixed(1)+' días':'—'}</div></div>
+      <div class="freq-card" draggable="true" data-id="dd-freq"><div class="freq-label">Frecuencia DD</div><div class="freq-value">${m.ddCount} veces</div></div>
+      <div class="freq-card" draggable="true" data-id="t-day"><div class="freq-label">Trades / día (prom.)</div><div class="freq-value">${m.tradesPerDay.toFixed(1)}</div></div>
+      <div class="freq-card" draggable="true" data-id="t-week"><div class="freq-label">Trades / semana (prom.)</div><div class="freq-value">${m.tradesPerWeek.toFixed(1)}</div></div>
+      <div class="freq-card" draggable="true" data-id="t-month"><div class="freq-label">Trades / mes (prom.)</div><div class="freq-value">${m.tradesPerMonth.toFixed(1)}</div></div>`;
+    initDraggableGrid(freqGrid, 'journal_freq_order');
+  }
 
   renderDayWR(trades);
   renderDonutChart(m.wins.length,m.losses.length,m.bes.length);
@@ -837,9 +839,48 @@ function renderAnalytics() {
   renderPerfCalendar(trades);
 }
 
+function initDraggableGrid(grid, storageKey) {
+  const cards = grid.querySelectorAll('[draggable="true"]');
+  cards.forEach(card => {
+    card.addEventListener('dragstart', () => card.classList.add('dragging'));
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      const newOrder = [...grid.querySelectorAll('[draggable="true"]')].map(c => c.dataset.id);
+      localStorage.setItem(storageKey, JSON.stringify(newOrder));
+    });
+  });
 
-function metricCard(label,value,cls,sub,tooltip){
-  return `<div class="card">
+  if (!grid._dragInit) {
+    grid.addEventListener('dragover', e => {
+      e.preventDefault();
+      const dragging = grid.querySelector('.dragging');
+      if(!dragging) return;
+      const afterElement = getDragAfterElement(grid, e.clientX, e.clientY);
+      if (afterElement == null) {
+        grid.appendChild(dragging);
+      } else {
+        grid.insertBefore(dragging, afterElement);
+      }
+    });
+    grid._dragInit = true;
+  }
+}
+
+function getDragAfterElement(container, x, y) {
+  const draggableElements = [...container.querySelectorAll('[draggable="true"]:not(.dragging)')];
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function metricCard(id,label,value,cls,sub,tooltip){
+  return `<div class="card" draggable="true" data-id="${id}">
     <div class="card-label">${label}${tooltip?`<div class="tooltip-wrap"><div class="tooltip-icon">i</div><div class="tooltip-box"><div class="tooltip-box-title">${label}</div>${tooltip}</div></div>`:''}</div>
     <div class="card-value ${cls||''}">${value}</div>
     ${sub?`<div class="card-sub">${sub}</div>`:''}
