@@ -23,7 +23,7 @@ const state = {
 };
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
-async function boot() {
+export async function boot() {
   await initDB();
   bindCloudUI();
   bindLoginUI();
@@ -1257,4 +1257,4 @@ function isoWeek(dateStr){const d=new Date(dateStr+'T12:00:00');const jan4=new D
 function setEl(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls)el.className='card-value '+cls;}
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(t._timer);t._timer=setTimeout(()=>{t.classList.remove('show');},3000);}
 
-document.addEventListener('DOMContentLoaded', boot);
+// boot is exported and called from index.html
