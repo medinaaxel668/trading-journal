@@ -107,15 +107,20 @@ window.enterMode = async function(mode) {
   state.analyticsStrategy = '';
   showAppScreen();
   setupModeUI();
+  
+  if (!state.bound) {
+    resetFormListeners();
+    bindNav();
+    bindTradeForm();
+    bindEditModal();
+    bindDetailModal();
+    bindNoteForm();
+    bindMonthYearFilter();
+    bindHistoryFilters();
+    state.bound = true;
+  }
+  
   await loadData();
-  resetFormListeners();
-  bindNav();
-  bindTradeForm();
-  bindEditModal();
-  bindDetailModal();
-  bindNoteForm();
-  bindMonthYearFilter();
-  bindHistoryFilters();
   renderAll();
 };
 
@@ -243,7 +248,8 @@ function renderModeStats() {
   setEl('mc-live-count',live.length);
   setEl('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
   setEl('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
-  if (db && db.cloud) {
+  if (db && db.cloud && !state.cloudSubscribed) {
+    state.cloudSubscribed = true;
     try {
       db.cloud.syncState.subscribe(s => {
         const badge = document.getElementById('mode-sync-badge'); if(!badge)return;
@@ -473,6 +479,10 @@ function renderDashboard() {
 }
 
 function renderEquityChart(series, canvasId) {
+  if (!window.Chart) {
+    setTimeout(() => renderEquityChart(series, canvasId), 300);
+    return;
+  }
   const ctx=document.getElementById(canvasId); if(!ctx)return;
   const key=canvasId==='chart-equity'?'equity':'equityAnalytics';
   destroyChart(key);
