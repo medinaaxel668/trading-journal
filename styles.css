@@ -768,6 +768,41 @@ header {
 .cloud-email { font-size: .73rem; color: var(--text-muted); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 560px) { .cloud-controls { display: none; } }
 
+/* ── TAG CLOUD ───────────────────────────────────────────────────────────── */
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+}
+.tag-chip {
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+.tag-chip:hover {
+  border-color: var(--gold-dim);
+  color: var(--text);
+  background: rgba(240, 165, 0, 0.05);
+}
+.tag-chip.active {
+  background: var(--gold);
+  color: #000;
+  border-color: var(--gold);
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(240, 165, 0, 0.3);
+}
+
 /* ── MISC ────────────────────────────────────────────────────────────────── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }

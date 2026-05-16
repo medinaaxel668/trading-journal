@@ -16,7 +16,7 @@ const state = {
   charts: {},
   editingTradeId: null,
   currentTab: 'dashboard',
-  analyticsTag: '',
+  analyticsTags: [],
   historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'' },
   bound: false // flag para evitar listeners duplicados
 };
@@ -128,6 +128,7 @@ function setupModeUI() {
     if (symBT)     symBT.style.display     = 'block';
     if (symLive)   symLive.style.display   = 'none';
   }
+  renderTagCloud('t-tag-cloud', 't-tags-input');
 }
 
 // ── LOGIN UI ──────────────────────────────────────────────────────────────────
@@ -254,6 +255,39 @@ async function migrateTradesToTags() {
   }
 }
 
+function renderTagCloud(containerId, inputId) {
+  const container = document.getElementById(containerId);
+  const input = document.getElementById(inputId);
+  if (!container || !input) return;
+
+  const allTags = new Set();
+  state.trades.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
+  // Incluir SMT siempre por defecto
+  allTags.add('SMT');
+  const sortedTags = [...allTags].sort();
+
+  const getCurrentTags = () => input.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
+
+  container.innerHTML = sortedTags.map(tag => {
+    const active = getCurrentTags().includes(tag);
+    return `<button type="button" class="tag-chip ${active?'active':''}" data-tag="${esc(tag)}">${esc(tag)}</button>`;
+  }).join('');
+
+  container.querySelectorAll('.tag-chip').forEach(btn => {
+    btn.onclick = () => {
+      let tags = getCurrentTags();
+      const tag = btn.dataset.tag;
+      if (tags.includes(tag)) {
+        tags = tags.filter(t => t !== tag);
+      } else {
+        tags.push(tag);
+      }
+      input.value = tags.join(', ');
+      renderTagCloud(containerId, inputId);
+    };
+  });
+}
+
 // ── DATA ──────────────────────────────────────────────────────────────────────
 async function loadData() {
   if (state.mode === 'live') {
@@ -270,6 +304,8 @@ function renderAll() {
   renderHistory();
   renderAnalytics();
   renderNotes();
+  renderTagCloud('t-tag-cloud', 't-tags-input');
+  renderTagCloud('edit-tag-cloud', 'edit-tags-input');
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -753,6 +789,7 @@ function openEditModal(id) {
   set('pnl',t.pnl);
   set('rrPlanned',t.rrPlanned??'');
   set('tags', (t.tags||[]).join(', '));
+  renderTagCloud('edit-tag-cloud', 'edit-tags-input');
   set('tradingViewUrl',t.tradingViewUrl);set('imageM3Url',t.imageM3Url);set('imageM15Url',t.imageM15Url);
   // BE outcome
   const beSection=document.getElementById('edit-be-outcome-section');
@@ -796,13 +833,27 @@ function renderAnalytics() {
 
   const btnContainer=document.getElementById('tag-filter-btns');
   if(btnContainer){
-    btnContainer.innerHTML=`<button class="strategy-filter-btn ${!state.analyticsTag?'active':''}" data-tag="">Todas</button>`
-      +sortedTags.map(s=>`<button class="strategy-filter-btn ${state.analyticsTag===s?'active':''}" data-tag="${esc(s)}">${esc(s)}</button>`).join('');
+    btnContainer.innerHTML=`<button class="strategy-filter-btn ${state.analyticsTags.length===0?'active':''}" data-tag="__all__">Todas</button>`
+      +sortedTags.map(s=>`<button class="strategy-filter-btn ${state.analyticsTags.includes(s)?'active':''}" data-tag="${esc(s)}">${esc(s)}</button>`).join('');
     btnContainer.querySelectorAll('.strategy-filter-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{ state.analyticsTag=btn.dataset.tag; renderAnalytics(); });
+      btn.addEventListener('click',()=>{
+        const tag = btn.dataset.tag;
+        if (tag === '__all__') {
+          state.analyticsTags = [];
+        } else {
+          if (state.analyticsTags.includes(tag)) {
+            state.analyticsTags = state.analyticsTags.filter(t => t !== tag);
+          } else {
+            state.analyticsTags.push(tag);
+          }
+        }
+        renderAnalytics(); 
+      });
     });
   }
-  const trades=state.analyticsTag?state.trades.filter(t=>(t.tags||[]).includes(state.analyticsTag)):state.trades;
+  const trades = state.analyticsTags.length > 0 
+    ? state.trades.filter(t => state.analyticsTags.every(tag => (t.tags || []).includes(tag)))
+    : state.trades;
   const m=computeMetrics(trades);
 
   // ── MAPPING DE CARTAS ──

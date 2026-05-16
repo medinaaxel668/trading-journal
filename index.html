@@ -172,7 +172,8 @@
             <label class="form-label">Estrategia y Condiciones (Etiquetas)</label>
             <div style="position:relative">
               <input id="t-tags-input" class="form-input" type="text" placeholder="Ej: SMT, FVG, BMS, ICT..." />
-              <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Separá las etiquetas con comas</div>
+              <div id="t-tag-cloud" class="tag-cloud" style="margin-top:10px"></div>
+              <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Separá las etiquetas con comas o usá la nube de arriba</div>
             </div>
           </div>
           <div class="form-group" id="strategy-live-field" style="display:none">
@@ -381,8 +382,9 @@
     <div class="modal-title">Editar Trade</div>
     <form id="edit-form" autocomplete="off">
       <div class="form-group">
-        <label class="form-label">Etiquetas (separadas por coma)</label>
+        <label class="form-label">Etiquetas (separadas por coma o seleccioná abajo)</label>
         <input id="edit-tags-input" class="form-input" type="text" name="tags" placeholder="Ej: SMT, FVG, BMS..." />
+        <div id="edit-tag-cloud" class="tag-cloud" style="margin-top:10px"></div>
       </div>
       <div class="form-row form-row-3">
         <div><label class="form-label">Fecha *</label><input class="form-input" type="date" name="date" required /></div>
