@@ -85,8 +85,8 @@ header {
 
 .mode-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
   margin-bottom: 40px;
 }
 
@@ -144,6 +144,9 @@ header {
 }
 
 /* ── FORMS & RADIOS ─────────────────────────────────────────────────────── */
+.grid-3-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+.grid-2-col { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+
 .radio-group {
   display: flex;
   background: var(--bg-input);
