@@ -28,6 +28,7 @@ async function boot() {
   bindCloudUI();
   bindLoginUI();
   checkSession();
+  initTheme();
   await migrateTradesToTags();
 }
 
@@ -57,6 +58,37 @@ async function showModeScreen() {
   await loadAllData();
   renderModeStats();
   bindModeLogout();
+}
+
+// ── THEME ─────────────────────────────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('journal_theme') || 'dark';
+  if (saved === 'light') document.body.classList.add('light-mode');
+  
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.addEventListener('click', toggleTheme);
+  }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('light-mode');
+  const isLight = document.body.classList.contains('light-mode');
+  localStorage.setItem('journal_theme', isLight ? 'light' : 'dark');
+  updateChartDefaults();
+  renderAll();
+}
+
+function updateChartDefaults() {
+  const isLight = document.body.classList.contains('light-mode');
+  const text = isLight ? '#2D2D2D' : '#EAE0D2';
+  const grid = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+  
+  if (window.Chart) {
+    Chart.defaults.color = text;
+    Chart.defaults.scale.grid.color = grid;
+    Chart.defaults.scale.ticks.color = text;
+  }
 }
 
 function showAppScreen() {
@@ -1113,15 +1145,17 @@ function bindMonthYearFilter(){
 }
 
 function barChart(ctx,labels,data,label){
+  updateChartDefaults();
   return new Chart(ctx,{type:'bar',
     data:{labels,datasets:[{label,data,
-      backgroundColor:data.map(v=>v>=0?'rgba(76,175,80,.75)':'rgba(244,67,54,.75)'),
-      borderColor:data.map(v=>v>=0?'#4caf50':'#f44336'),borderWidth:1,borderRadius:4}]},
+      backgroundColor:data.map(v=>v>=0?'#8fb339':'#d62828'),
+      borderColor:data.map(v=>v>=0?'#8fb339':'#d62828'),borderWidth:1,borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:item=>` ${fmtPnl(item.raw)}`},
-        backgroundColor:'#1e1e1e',titleColor:'#888',bodyColor:'#f0f0f0',borderColor:'#2e2e2e',borderWidth:1}},
-      scales:{x:{ticks:{color:'#888',font:{size:11}},grid:{color:'#1e1e1e'}},
-        y:{ticks:{color:'#888',font:{size:11},callback:v=>fmtPnl(v)},grid:{color:'#252525'}}}}});
+        backgroundColor:document.body.classList.contains('light-mode')?'#fff':'#1e1e1e',
+        titleColor:document.body.classList.contains('light-mode')?'#333':'#888',
+        bodyColor:document.body.classList.contains('light-mode')?'#000':'#f0f0f0'}},
+      scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>fmtPnl(v)}}}}});
 }
 
 // ── NOTES ─────────────────────────────────────────────────────────────────────
