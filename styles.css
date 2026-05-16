@@ -496,16 +496,65 @@ header {
 
 /* ── HISTORY FILTERS ─────────────────────────────────────────────────────── */
 .history-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
 }
-.history-filters select, .history-filters input { flex: 1; min-width: 130px; }
+@media (max-width: 600px) {
+  .history-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.history-filters select, .history-filters input { width: 100%; }
+
+/* ── ANALYTICS FILTERS ───────────────────────────────────────────────────── */
+.analytics-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+}
+.analytics-filter-bar::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+.analytics-filter-label { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; font-weight: 600; white-space: nowrap; }
+
+.strategy-filter-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: .82rem;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.strategy-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.strategy-filter-btn.active { background: var(--gold); border-color: var(--gold); color: #000; font-weight: 700; }
+
+/* ── ANALYTICS METRICS GRID ─────────────────────────────────────────────── */
+.analytics-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 600px) {
+  .analytics-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ── DETAIL MODAL ────────────────────────────────────────────────────────── */
 .detail-modal-overlay {

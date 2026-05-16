@@ -168,18 +168,11 @@
     <section id="tab-add" class="tab-section">
       <div class="form-card">
         <form id="trade-form" autocomplete="off">
-          <!-- Estrategia: smart dropdown en backtesting, input normal en live -->
           <div class="form-group" id="strategy-bt-field">
-            <label class="form-label">Nombre de Estrategia *</label>
+            <label class="form-label">Estrategia y Condiciones (Etiquetas)</label>
             <div style="position:relative">
-              <select id="t-strategy-select" class="form-select" style="appearance:none;padding-right:28px">
-                <option value="">Seleccionar estrategia...</option>
-              </select>
-              <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:10px">▼</span>
-            </div>
-            <div id="t-strategy-select-new-wrap" style="display:none;margin-top:6px">
-              <input id="t-strategy-new-input" class="form-input" type="text" placeholder="Escribí el nombre de la nueva estrategia..." />
-              <div style="font-size:.75rem;color:var(--gold);margin-top:3px">✓ Se guardará automáticamente para la próxima vez</div>
+              <input id="t-tags-input" class="form-input" type="text" placeholder="Ej: SMT, FVG, BMS, ICT..." />
+              <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Separá las etiquetas con comas</div>
             </div>
           </div>
           <div class="form-group" id="strategy-live-field" style="display:none">
@@ -289,7 +282,12 @@
     <!-- ── HISTORY ─────────────────────────────────────────────────────────── -->
     <section id="tab-history" class="tab-section">
       <div class="history-filters">
-        <select id="filter-strategy" class="form-select"><option value="">Todas las estrategias</option></select>
+        <select id="filter-tag" class="form-select"><option value="">Todas las etiquetas</option></select>
+        <select id="filter-smt" class="form-select">
+          <option value="">Todos los trades</option>
+          <option value="true">Solo con SMT</option>
+          <option value="false">Sin SMT</option>
+        </select>
         <select id="filter-result" class="form-select">
           <option value="">Todos los resultados</option>
           <option value="TP">TP</option><option value="SL">SL</option><option value="BE">BE</option>
@@ -302,11 +300,11 @@
 
     <!-- ── ANALYTICS ───────────────────────────────────────────────────────── -->
     <section id="tab-analytics" class="tab-section">
-      <!-- Filtro por estrategia -->
+      <!-- Filtro Maestro por Etiquetas -->
       <div class="analytics-filter-bar">
-        <span class="analytics-filter-label">Estrategia:</span>
-        <div id="strategy-filter-btns" style="display:flex;flex-wrap:wrap;gap:8px;">
-          <button class="strategy-filter-btn active" data-strategy="">Todas</button>
+        <span class="analytics-filter-label">Filtrar por Etiqueta:</span>
+        <div id="tag-filter-btns" style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button class="strategy-filter-btn active" data-tag="">Todas</button>
         </div>
       </div>
 
@@ -382,7 +380,10 @@
   <div class="modal">
     <div class="modal-title">Editar Trade</div>
     <form id="edit-form" autocomplete="off">
-      <div class="form-group"><label class="form-label">Estrategia *</label><input class="form-input" type="text" name="strategyName" required /></div>
+      <div class="form-group">
+        <label class="form-label">Etiquetas (separadas por coma)</label>
+        <input id="edit-tags-input" class="form-input" type="text" name="tags" placeholder="Ej: SMT, FVG, BMS..." />
+      </div>
       <div class="form-row form-row-3">
         <div><label class="form-label">Fecha *</label><input class="form-input" type="date" name="date" required /></div>
         <div><label class="form-label">Símbolo *</label><input class="form-input" type="text" name="symbol" required /></div>

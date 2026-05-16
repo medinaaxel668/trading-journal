@@ -30,10 +30,10 @@ export async function initDB() {
   }
 
   // ── Schema completo: incluye liveTrades y liveNotes ──────────────────────────
-  db.version(2).stores({
-    trades:     'id,date,strategyName,symbol,killZone,side,result,createdAt,[date+strategyName]',
+  db.version(3).stores({
+    trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName]',
     notes:      'id,date,createdAt',
-    liveTrades: 'id,date,strategyName,symbol,killZone,side,result,createdAt',
+    liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt',
     liveNotes:  'id,date,createdAt'
   });
 
@@ -53,7 +53,7 @@ function uuid() {
 function nowISO() { return new Date().toISOString(); }
 
 function validateTrade(t) {
-  const required = ['strategyName','date','symbol','killZone','side','result'];
+  const required = ['date','symbol','killZone','side','result'];
   for (const f of required) {
     if (!t[f] || String(t[f]).trim() === '') throw new Error(`Campo requerido: ${f}`);
   }
@@ -71,7 +71,8 @@ export async function getAllTrades() {
 export async function addTrade(data) {
   const trade = {
     id: uuid(),
-    strategyName: String(data.strategyName).trim(),
+    strategyName: String(data.strategyName || '').trim(),
+    tags:         Array.isArray(data.tags) ? data.tags : [],
     date:         String(data.date).trim(),
     symbol:       String(data.symbol).trim().toUpperCase(),
     killZone:     String(data.killZone).trim(),
@@ -96,7 +97,8 @@ export async function updateTrade(id, data) {
   if (!existing) throw new Error('Trade no encontrado');
   const updated = {
     ...existing,
-    strategyName: String(data.strategyName).trim(),
+    strategyName: String(data.strategyName || '').trim(),
+    tags:         Array.isArray(data.tags) ? data.tags : [],
     date:         String(data.date).trim(),
     symbol:       String(data.symbol).trim().toUpperCase(),
     killZone:     String(data.killZone).trim(),
@@ -145,7 +147,8 @@ export async function getAllLiveTrades() {
 export async function addLiveTrade(data) {
   const trade = {
     id: uuid(), mode: 'live',
-    strategyName: String(data.strategyName).trim(),
+    strategyName: String(data.strategyName || '').trim(),
+    tags:         Array.isArray(data.tags) ? data.tags : [],
     date:         String(data.date).trim(),
     symbol:       String(data.symbol).trim().toUpperCase(),
     killZone:     String(data.killZone).trim(),
@@ -173,7 +176,8 @@ export async function updateLiveTrade(id, data) {
   if (!existing) throw new Error('Trade no encontrado');
   const updated = {
     ...existing,
-    strategyName: String(data.strategyName).trim(),
+    strategyName: String(data.strategyName || '').trim(),
+    tags:         Array.isArray(data.tags) ? data.tags : [],
     date:         String(data.date).trim(),
     symbol:       String(data.symbol).trim().toUpperCase(),
     killZone:     String(data.killZone).trim(),

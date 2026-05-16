@@ -16,8 +16,8 @@ const state = {
   charts: {},
   editingTradeId: null,
   currentTab: 'dashboard',
-  analyticsStrategy: '',
-  historyFilters: { strategy:'', result:'', dateFrom:'', dateTo:'' },
+  analyticsTag: '',
+  historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'' },
   bound: false // flag para evitar listeners duplicados
 };
 
@@ -527,18 +527,20 @@ function collectTradeForm(formId) {
   const f=document.getElementById(formId);
   const v=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.value:'';};
   const r=name=>{const el=f.querySelector(`[name="${name}"]:checked`);return el?el.value:'';};
-  // Para ambos modos, leer de smart dropdowns
-  let strategyName, symbol;
-  if(formId==='trade-form') {
-    strategyName = collectSmartField(formId,'strategyName','t-strategy-select','t-strategy-new-input',STORAGE_STRATEGIES);
-    symbol       = collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS);
+  
+  let tags = [];
+  if (formId === 'trade-form') {
+    const rawTags = document.getElementById('t-tags-input')?.value || '';
+    tags = rawTags.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
   } else {
-    strategyName = v('strategyName');
-    symbol       = v('symbol');
+    const rawTags = document.getElementById('edit-tags-input')?.value || '';
+    tags = rawTags.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
   }
+
   const smtVal = r('smt');
   return {
-    strategyName, date:v('date'), symbol,
+    strategyName: tags[0] || '', // retro-compatibilidad
+    tags, date:v('date'), symbol:v('symbol')||collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS),
     killZone:v('killZone'),side:r('side'),result:r('result'),
     beOutcome:r('beOutcome'),smt:smtVal==='true',
     pnl:v('pnl'),rrPlanned:v('rrPlanned'),tradingViewUrl:v('tradingViewUrl'),
@@ -548,18 +550,21 @@ function collectTradeForm(formId) {
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────────
-function populateStrategyFilter() {
-  const sel=document.getElementById('filter-strategy'); if(!sel)return;
-  const strategies=[...new Set(state.trades.map(t=>t.strategyName))].sort();
+function populateTagFilter() {
+  const sel=document.getElementById('filter-tag'); if(!sel)return;
+  const allTags = new Set();
+  state.trades.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
+  const sortedTags = [...allTags].sort();
   const currentVal=sel.value;
-  sel.innerHTML='<option value="">Todas las estrategias</option>'+
-    strategies.map(s=>`<option value="${esc(s)}"${currentVal===s?' selected':''}>${esc(s)}</option>`).join('');
+  sel.innerHTML='<option value="">Todas las etiquetas</option>'+
+    sortedTags.map(s=>`<option value="${esc(s)}"${currentVal===s?' selected':''}>${esc(s)}</option>`).join('');
 }
 
 function bindHistoryFilters() {
-  const ids=['filter-strategy','filter-result','filter-date-from','filter-date-to'];
+  const ids=['filter-tag','filter-smt','filter-result','filter-date-from','filter-date-to'];
   const update=()=>{
-    state.historyFilters.strategy=document.getElementById('filter-strategy')?.value||'';
+    state.historyFilters.tag     =document.getElementById('filter-tag')?.value||'';
+    state.historyFilters.smt     =document.getElementById('filter-smt')?.value||'';
     state.historyFilters.result  =document.getElementById('filter-result')?.value||'';
     state.historyFilters.dateFrom=document.getElementById('filter-date-from')?.value||'';
     state.historyFilters.dateTo  =document.getElementById('filter-date-to')?.value||'';
@@ -569,10 +574,14 @@ function bindHistoryFilters() {
 }
 
 function renderHistory() {
-  populateStrategyFilter();
+  populateTagFilter();
   let trades=[...state.trades];
   const f=state.historyFilters;
-  if(f.strategy) trades=trades.filter(t=>t.strategyName===f.strategy);
+  if(f.tag) trades=trades.filter(t=>(t.tags||[]).includes(f.tag));
+  if(f.smt !== '') {
+    const smtBool = f.smt === 'true';
+    trades=trades.filter(t=>t.smt === smtBool);
+  }
   if(f.result)   trades=trades.filter(t=>t.result===f.result);
   if(f.dateFrom) trades=trades.filter(t=>t.date>=f.dateFrom);
   if(f.dateTo)   trades=trades.filter(t=>t.date<=f.dateTo);
@@ -598,15 +607,19 @@ function buildTradeCard(t) {
   ].filter(Boolean).join('');
   const beTag = t.result==='BE'&&t.beOutcome
     ? `<span class="badge badge-be" style="font-size:.65rem">BE→${t.beOutcome}</span>` : '';
-  const smtTag = t.smt ? `<span class="badge" style="font-size:.65rem;background:rgba(100,200,255,.2);color:#64c8ff;border:1px solid rgba(100,200,255,.4)">SMT</span>` : '';
+  const smtTag = t.smt ? `<span class="badge" style="font-size:.65rem;background:rgba(100,200,255,.15);color:#64c8ff;border:1px solid rgba(100,200,255,.3)">SMT</span>` : '';
+  const tagsHtml = (t.tags || []).map(tag => `<span class="badge" style="font-size:.65rem;background:rgba(255,255,255,0.05);color:var(--text-muted);border:1px solid var(--border)">${esc(tag)}</span>`).join(' ');
+  
   return `
   <div class="trade-item">
     <div class="trade-item-header">
-      <span class="trade-strategy">${esc(t.strategyName)}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;flex:1">
+        ${tagsHtml}
+        ${smtTag}
+        ${beTag}
+      </div>
       <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span>
       <span class="badge ${badgeResult(t.result)}">${t.result}</span>
-      ${beTag}
-      ${smtTag}
       <span class="trade-pnl ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</span>
     </div>
     <div class="trade-meta">
@@ -661,6 +674,7 @@ function openDetailModal(id) {
     <div class="detail-row"><span class="detail-row-label">Lado</span><span class="detail-row-value">${t.side==='BUY'?'BUY (Long)':'SELL (Short)'}</span></div>
     <div class="detail-row"><span class="detail-row-label">Resultado</span><span class="detail-row-value">${t.result}</span></div>
     <div class="detail-row"><span class="detail-row-label">SMT</span><span class="detail-row-value">${t.smt?'✅ Sí':'—'}</span></div>
+    <div class="detail-row"><span class="detail-row-label">Etiquetas</span><span class="detail-row-value">${(t.tags||[]).join(', ')||'—'}</span></div>
     ${beOutcomeRow}
     ${liveSection}
     ${links?`<div class="detail-section">Referencias</div><div class="detail-links">${links}</div>`:''}`;
@@ -702,10 +716,9 @@ function openEditModal(id) {
   state.editingTradeId=id;
   const f=document.getElementById('edit-form');
   const set=(name,val)=>{const el=f.querySelector(`[name="${name}"]`);if(el)el.value=val??'';};
-  const setRadio=(name,val)=>f.querySelectorAll(`[name="${name}"]`).forEach(r=>{r.checked=r.value===val;});
-  set('strategyName',t.strategyName);set('date',t.date);set('symbol',t.symbol);
-  set('killZone',t.killZone);setRadio('side',t.side);setRadio('result',t.result);
+  setRadio('side',t.side);setRadio('result',t.result);
   set('pnl',t.pnl);set('rrPlanned',t.rrPlanned??'');
+  set('tags', (t.tags||[]).join(', '));
   set('tradingViewUrl',t.tradingViewUrl);set('imageM3Url',t.imageM3Url);set('imageM15Url',t.imageM15Url);
   // BE outcome
   const beSection=document.getElementById('edit-be-outcome-section');
@@ -743,50 +756,50 @@ function confirmDelete(id) {
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
 function renderAnalytics() {
-  const strategies=[...new Set(state.trades.map(t=>t.strategyName))].sort();
-  const btnContainer=document.getElementById('strategy-filter-btns');
+  const allTags = new Set();
+  state.trades.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
+  const sortedTags = [...allTags].sort();
+
+  const btnContainer=document.getElementById('tag-filter-btns');
   if(btnContainer){
-    btnContainer.innerHTML=`<button class="strategy-filter-btn ${!state.analyticsStrategy?'active':''}" data-strategy="">Todas</button>`
-      +strategies.map(s=>`<button class="strategy-filter-btn ${state.analyticsStrategy===s?'active':''}" data-strategy="${esc(s)}">${esc(s)}</button>`).join('');
+    btnContainer.innerHTML=`<button class="strategy-filter-btn ${!state.analyticsTag?'active':''}" data-tag="">Todas</button>`
+      +sortedTags.map(s=>`<button class="strategy-filter-btn ${state.analyticsTag===s?'active':''}" data-tag="${esc(s)}">${esc(s)}</button>`).join('');
     btnContainer.querySelectorAll('.strategy-filter-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{ state.analyticsStrategy=btn.dataset.strategy; renderAnalytics(); });
+      btn.addEventListener('click',()=>{ state.analyticsTag=btn.dataset.tag; renderAnalytics(); });
     });
   }
-  const trades=state.analyticsStrategy?state.trades.filter(t=>t.strategyName===state.analyticsStrategy):state.trades;
+  const trades=state.analyticsTag?state.trades.filter(t=>(t.tags||[]).includes(state.analyticsTag)):state.trades;
   const m=computeMetrics(trades);
 
   // ── MAPPING DE CARTAS ──
   const cardDefs = {
-    'pnl':       () => metricCard('pnl', 'P&L Total', fmtPnl(m.totalPnl), colorClass(m.totalPnl), null, 'Suma total de ganancias y pérdidas de todos los trades.'),
-    'wr':        () => metricCard('wr', 'Win Rate', m.winRate!==null?fmtPct(m.winRate):'N/A', m.winRate!==null?colorClass(m.winRate-.5):'neutral', 'excl. BE', 'Porcentaje de trades ganadores sobre decisivos (TP+SL). Los BE no entran en el cálculo.'),
-    'pf':        () => metricCard('pf', 'Profit Factor', m.profitFactor!==null?m.profitFactor.toFixed(2):'N/A', m.profitFactor!==null?colorClass(m.profitFactor-1):'neutral', null, 'Divide el total de ganancias entre el total de pérdidas. Mayor a 1 = sistema rentable.'),
-    'ev':        () => metricCard('ev', 'Expected Value', m.ev!==null?fmtPnl(m.ev):'N/A', m.ev!==null?colorClass(m.ev):'neutral', 'excl. BE', 'Resultado promedio esperado por trade. Positivo = sistema con ventaja estadística.'),
-    'rr':        () => metricCard('rr', 'RR Prom. Real', m.avgRR!==null?m.avgRR.toFixed(2):'N/A', 'neutral', 'planificado', 'Risk/Reward promedio planificado. Si es menor al ideal, revisá tu gestión de salidas.'),
-    'best':      () => metricCard('best', 'Mejor Trade', m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A', 'positive', null, 'El trade individual con mayor ganancia.'),
-    'worst':     () => metricCard('worst', 'Peor Trade', m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A', 'negative', null, 'El trade individual con mayor pérdida.'),
-    'be-tp':     () => metricCard('be-tp', 'BE → Continuó a TP', m.beToTP, 'positive', `${m.bes.length>0?Math.round(m.beToTP/m.bes.length*100):0}% de ${m.bes.length} BE`, 'Breakevens donde el precio continuó hacia el TP después de sacarte.'),
-    'be-sl':     () => metricCard('be-sl', 'BE → Continuó a SL', m.beToSL, 'negative', `${m.bes.length>0?Math.round(m.beToSL/m.bes.length*100):0}% de ${m.bes.length} BE`, 'Breakevens donde el precio fue al SL después de sacarte.'),
-    'streak-b':  () => metricCard('streak-b', 'Mejor Racha', m.bestStreak, 'positive', 'TPs consecutivos', 'Mayor cantidad de trades ganadores consecutivos.'),
-    'streak-w':  () => metricCard('streak-w', 'Peor Racha', m.worstStreak, 'negative', 'SLs consecutivos', 'Mayor cantidad de trades perdedores consecutivos.'),
-    'total':     () => metricCard('total', 'Total Trades', m.totalCount, 'neutral', `${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`, 'Total de trades registrados.'),
-    'dd':        () => metricCard('dd', 'Max Drawdown', m.maxDD!==0?fmtPnl(m.maxDD):'—', m.maxDD<0?'negative':'neutral', null, 'La mayor caída acumulada desde un pico hasta el punto más bajo.')
+    'pnl':       () => metricCard('pnl', 'P&L Total', fmtPnl(m.totalPnl), colorClass(m.totalPnl), null, 'Suma total de ganancias y pérdidas.'),
+    'wr':        () => metricCard('wr', 'Win Rate', m.winRate!==null?fmtPct(m.winRate):'N/A', m.winRate!==null?colorClass(m.winRate-.5):'neutral', 'excl. BE', 'Porcentaje de trades ganadores (TP / TP+SL).'),
+    'pf':        () => metricCard('pf', 'Profit Factor', m.profitFactor!==null?m.profitFactor.toFixed(2):'N/A', m.profitFactor!==null?colorClass(m.profitFactor-1):'neutral', null, 'Total Ganancia / Total Pérdida.'),
+    'ev':        () => metricCard('ev', 'Expected Value', m.ev!==null?fmtPnl(m.ev):'N/A', m.ev!==null?colorClass(m.ev):'neutral', 'excl. BE', 'Resultado promedio esperado por trade.'),
+    'rr':        () => metricCard('rr', 'RR Prom. Real', m.avgRR!==null?m.avgRR.toFixed(2):'N/A', 'neutral', 'planificado', 'Risk/Reward promedio planificado.'),
+    'best':      () => metricCard('best', 'Mejor Trade', m.bestTrade!==null?fmtPnl(m.bestTrade):'N/A', 'positive', null, 'Mayor ganancia individual.'),
+    'worst':     () => metricCard('worst', 'Peor Trade', m.worstTrade!==null?fmtPnl(m.worstTrade):'N/A', 'negative', null, 'Mayor pérdida individual.'),
+    'be-tp':     () => metricCard('be-tp', 'BE → TP', m.beToTP, 'positive', `${m.bes.length>0?Math.round(m.beToTP/m.bes.length*100):0}% de BEs`, 'BE que continuaron a TP.'),
+    'be-sl':     () => metricCard('be-sl', 'BE → SL', m.beToSL, 'negative', `${m.bes.length>0?Math.round(m.beToSL/m.bes.length*100):0}% de BEs`, 'BE que continuaron a SL.'),
+    'streak-b':  () => metricCard('streak-b', 'Mejor Racha', m.bestStreak, 'positive', 'TPs seguidos', 'Máximo de TPs consecutivos.'),
+    'streak-w':  () => metricCard('streak-w', 'Peor Racha', m.worstStreak, 'negative', 'SLs seguidos', 'Máximo de SLs consecutivos.'),
+    'total':     () => metricCard('total', 'Total Trades', m.totalCount, 'neutral', `${m.wins.length} TP · ${m.losses.length} SL · ${m.bes.length} BE`, 'Trades totales.'),
+    'dd':        () => metricCard('dd', 'Max Drawdown', m.maxDD!==0?fmtPnl(m.maxDD):'—', m.maxDD<0?'negative':'neutral', null, 'Máxima caída histórica.'),
+    'dd-freq':   () => metricCard('dd-freq', 'Frecuencia DD', m.ddCount, 'neutral', 'veces', 'Cuántas veces entraste en DD.'),
+    'dd-rec':    () => metricCard('dd-rec', 'Recuperación', m.avgDD.toFixed(1), 'neutral', 'días prom.', 'Tiempo promedio para salir de un DD.'),
+    'freq-w':    () => metricCard('freq-w', 'Trades / Sem', m.tradesPerWeek.toFixed(1), 'neutral', 'promedio', 'Promedio de trades por semana.'),
+    'freq-m':    () => metricCard('freq-m', 'Trades / Mes', m.tradesPerMonth.toFixed(1), 'neutral', 'promedio', 'Promedio de trades por mes.')
   };
 
-  // ── ORDENAMIENTO (localStorage) ──
-  const STORAGE_ORDER = 'journal_analytics_order_v2';
-  const defaultOrder = ['pnl','wr','pf','ev','rr','best','worst','be-tp','be-sl','streak-b','streak-w','total','dd'];
+  const STORAGE_ORDER = 'journal_analytics_order_v3';
+  const defaultOrder = ['pnl','wr','pf','ev','rr','best','worst','be-tp','be-sl','streak-b','streak-w','total','dd','dd-freq','dd-rec','freq-w','freq-m'];
   let savedOrder = JSON.parse(localStorage.getItem(STORAGE_ORDER) || 'null');
   if(!savedOrder) savedOrder = defaultOrder;
 
-  // Filtrar cartas que no tengan datos (ej: BE si no hay BEs)
-  const activeOrder = savedOrder.filter(id => {
-    if(id==='be-tp' || id==='be-sl') return m.bes.length > 0;
-    return true;
-  });
-
   const mg=document.getElementById('analytics-metrics-grid');
   if(mg) {
-    mg.innerHTML = activeOrder.map(id => cardDefs[id] ? cardDefs[id]() : '').join('');
+    mg.innerHTML = savedOrder.map(id => cardDefs[id] ? cardDefs[id]() : '').join('');
     initDraggableGrid(mg, STORAGE_ORDER);
   }
 
