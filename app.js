@@ -17,6 +17,7 @@ const state = {
   editingTradeId: null,
   currentTab: 'dashboard',
   analyticsTags: [],
+  customTags: JSON.parse(localStorage.getItem('journal_custom_tags') || '[]'),
   historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'' },
   bound: false // flag para evitar listeners duplicados
 };
@@ -262,18 +263,25 @@ function renderTagCloud(containerId, inputId) {
 
   const allTags = new Set();
   state.trades.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
+  state.customTags.forEach(tag => allTags.add(tag));
   // Incluir SMT siempre por defecto
   allTags.add('SMT');
   const sortedTags = [...allTags].sort();
 
   const getCurrentTags = () => input.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
 
-  container.innerHTML = sortedTags.map(tag => {
+  let html = sortedTags.map(tag => {
     const active = getCurrentTags().includes(tag);
-    return `<button type="button" class="tag-chip ${active?'active':''}" data-tag="${esc(tag)}">${esc(tag)}</button>`;
+    const isCustom = state.customTags.includes(tag);
+    return `<button type="button" class="tag-chip ${active?'active':''} ${isCustom?'custom':''}" data-tag="${esc(tag)}">${esc(tag)}</button>`;
   }).join('');
 
-  container.querySelectorAll('.tag-chip').forEach(btn => {
+  // Botón "+" para añadir nueva variante
+  html += `<button type="button" class="tag-chip btn-add-tag-variant" title="Añadir nueva variante">+</button>`;
+  
+  container.innerHTML = html;
+
+  container.querySelectorAll('.tag-chip:not(.btn-add-tag-variant)').forEach(btn => {
     btn.onclick = () => {
       let tags = getCurrentTags();
       const tag = btn.dataset.tag;
@@ -286,6 +294,21 @@ function renderTagCloud(containerId, inputId) {
       renderTagCloud(containerId, inputId);
     };
   });
+
+  const addBtn = container.querySelector('.btn-add-tag-variant');
+  if (addBtn) {
+    addBtn.onclick = () => {
+      const newTag = prompt('Escribe el nombre de la nueva etiqueta:');
+      if (newTag) {
+        const cleanTag = newTag.trim().toUpperCase();
+        if (cleanTag && !state.customTags.includes(cleanTag)) {
+          state.customTags.push(cleanTag);
+          localStorage.setItem('journal_custom_tags', JSON.stringify(state.customTags));
+          renderTagCloud(containerId, inputId);
+        }
+      }
+    };
+  }
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────────

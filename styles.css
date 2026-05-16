@@ -802,6 +802,28 @@ header {
   font-weight: 700;
   box-shadow: 0 0 10px rgba(240, 165, 0, 0.3);
 }
+.tag-chip.custom {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+.btn-add-tag-variant {
+  background: transparent;
+  border: 1px dashed var(--gold-dim);
+  color: var(--gold);
+  font-size: 1.1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.btn-add-tag-variant:hover {
+  background: var(--gold);
+  color: #000;
+  border-style: solid;
+}
 
 /* ── MISC ────────────────────────────────────────────────────────────────── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
