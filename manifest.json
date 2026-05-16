@@ -1,0 +1,23 @@
+{
+  "name": "Trading Journal Pro",
+  "short_name": "Journal Pro",
+  "description": "Professional Trading Journal with advanced analytics and multi-tag support.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#2D2D2D",
+  "theme_color": "#D7C9AE",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='48' fill='%232D2D2D'/%3E%3Cpolyline points='40,140 80,80 110,110 150,50 170,80' stroke='%23D7C9AE' stroke-width='12' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%232D2D2D'/%3E%3Cpolyline points='100,380 200,200 280,280 400,100 450,180' stroke='%23D7C9AE' stroke-width='30' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

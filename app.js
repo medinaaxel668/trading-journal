@@ -30,6 +30,9 @@ async function boot() {
   checkSession();
   initTheme();
   await migrateTradesToTags();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
 }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────

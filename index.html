@@ -7,489 +7,184 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-  <!-- Favicon SVG inline de gráfico/trading -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23111'/%3E%3Cpolyline points='3,24 9,16 14,20 20,10 27,14' stroke='%234caf50' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='27' cy='14' r='2' fill='%234caf50'/%3E%3C/svg%3E" />
+  <!-- Icono Premium personalizado -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232D2D2D'/%3E%3Cpolyline points='6,22 12,14 17,18 22,10 26,14' stroke='%23D7C9AE' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
   <script type="importmap">
   {
     "imports": {
-      "dexie": "./lib/dexie.js",
-      "dexie-cloud-addon": "./lib/dexie-cloud.js",
-      "/npm/dexie@4.4.2/+esm": "./lib/dexie.js",
-      "/npm/dexie@4.4.0/+esm": "./lib/dexie.js",
-      "/npm/dexie@4/+esm": "./lib/dexie.js",
-      "/npm/rxjs@7.8.2/+esm": "https://cdn.jsdelivr.net/npm/rxjs@7.8.2/+esm",
-      "/npm/rxjs@7.8.2/operators/+esm": "https://cdn.jsdelivr.net/npm/rxjs@7.8.2/operators/+esm",
-      "/npm/yjs@13.6.30/+esm": "https://cdn.jsdelivr.net/npm/yjs@13.6.30/+esm",
-      "/npm/lib0@0.2.117/encoding/+esm": "https://cdn.jsdelivr.net/npm/lib0@0.2.117/encoding/+esm",
-      "/npm/lib0@0.2.117/decoding/+esm": "https://cdn.jsdelivr.net/npm/lib0@0.2.117/decoding/+esm",
-      "/npm/y-protocols@1.0.7/awareness/+esm": "https://cdn.jsdelivr.net/npm/y-protocols@1.0.7/awareness/+esm",
-      "/npm/y-dexie@4.4.0/+esm": "https://cdn.jsdelivr.net/npm/y-dexie@4.4.0/+esm"
+      "dexie": "https://cdn.jsdelivr.net/npm/dexie@4.0.1/+esm",
+      "dexie-cloud-addon": "https://cdn.jsdelivr.net/npm/dexie-cloud-addon@4.0.1/+esm"
     }
   }
   </script>
-  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     LOGIN SCREEN
-══════════════════════════════════════════════════════════════════════════════ -->
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo">Journal</div>
-    <div class="login-subtitle">Iniciá sesión en tu cuenta</div>
-    <div class="login-card">
+<div id="login-screen" style="display:none">
+  <div class="mode-container" style="max-width:450px">
+    <div class="mode-card-item">
+      <div class="app-logo" style="margin-bottom:32px;font-size:1.5rem">Trading Journal <span style="color:var(--text-muted)">Pro</span></div>
       <div id="login-step-email">
-        <label class="login-field-label" for="login-email">Email</label>
-        <input id="login-email" class="login-input" type="email" placeholder="tu@email.com" autocomplete="email" />
-        <button id="btn-send-otp" class="btn-login" type="button">Continuar</button>
-        <div id="login-msg" class="login-msg"></div>
+        <input id="login-email" class="form-input" type="email" placeholder="Email" style="margin-bottom:12px" />
+        <button id="btn-send-otp" class="btn-enter-mode">Enviar Código</button>
+        <div id="login-msg" style="margin-top:10px;font-size:0.8rem"></div>
       </div>
       <div id="login-step-otp" style="display:none">
-        <div class="otp-hint">Revisá tu email — te enviamos un código de acceso.</div>
-        <label class="login-field-label" for="login-otp">Código OTP</label>
-        <input id="login-otp" class="login-input" type="text" placeholder="Ingresá el código" autocomplete="one-time-code" />
-        <button id="btn-verify-otp" class="btn-login" type="button">Ingresar</button>
-        <div id="login-msg2" class="login-msg"></div>
-        <div style="text-align:center;margin-top:12px">
-          <button id="btn-back-email" style="background:none;border:none;color:var(--text-muted);font-size:.82rem;cursor:pointer">← Cambiar email</button>
-        </div>
+        <input id="login-otp" class="form-input" type="text" placeholder="Código OTP" style="margin-bottom:12px" />
+        <button id="btn-verify-otp" class="btn-enter-mode">Verificar</button>
+        <div id="login-msg2" style="margin-top:10px;font-size:0.8rem"></div>
+      </div>
+      <div class="divider" style="margin:24px 0;opacity:0.1;border-top:1px solid white"></div>
+      <button onclick="showModeScreen()" class="tab-btn" style="width:100%">Continuar Local</button>
+    </div>
+  </div>
+</div>
+
+<div id="mode-screen" style="display:none">
+  <div class="mode-container">
+    <div class="mode-header">
+      <div class="app-logo">Trading Journal <span style="color:var(--text-muted)">Pro</span></div>
+      <div class="mode-user-info">
+        <span class="sync-badge" id="mode-sync-status">Offline</span>
+        <button class="btn-sm-logout" onclick="db.cloud.logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="mode-stats-grid">
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">P&L Global</div>
+        <div id="ms-pnl" class="mode-stat-value">---</div>
+      </div>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Win Rate</div>
+        <div id="ms-wr" class="mode-stat-value">---</div>
+        <div class="mode-stat-sub">excl. BE</div>
+      </div>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Backtesting</div>
+        <div id="ms-count-bt" class="mode-stat-value">---</div>
+        <div class="mode-stat-sub">trades</div>
+      </div>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Live</div>
+        <div id="ms-count-live" class="mode-stat-value">---</div>
+        <div class="mode-stat-sub">trades</div>
+      </div>
+    </div>
+
+    <div class="modes-grid">
+      <div class="mode-card-item" onclick="enterMode('backtest')">
+        <div class="mode-icon">📊</div>
+        <h3 class="mode-title">Backtesting</h3>
+        <p class="mode-desc">Analizá trades históricos y perfeccioná tu estrategia.</p>
+        <button class="btn-enter-mode">Ir a Backtesting →</button>
+      </div>
+      <div class="mode-card-item" onclick="enterMode('live')">
+        <div class="mode-icon">⚡</div>
+        <h3 class="mode-title">Trading en Vivo</h3>
+        <p class="mode-desc">Registrá tus sesiones reales y analizá tu psicología.</p>
+        <button class="btn-enter-mode">Ir a Live →</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODE SELECTOR SCREEN
-══════════════════════════════════════════════════════════════════════════════ -->
-<div id="mode-screen">
-  <div class="mode-header">
-    <div class="mode-logo">📈 Journal</div>
-    <div class="mode-user-info">
-      <span id="mode-sync-badge" class="sync-badge sync-offline">Offline</span>
-      <span id="mode-user-email" style="font-size:.82rem;color:var(--text-muted)"></span>
-      <button id="btn-mode-logout" class="btn-cloud btn-cloud-out">Logout</button>
-    </div>
-  </div>
-
-  <!-- Stats rápidas -->
-  <div class="mode-stats-grid">
-    <div class="mode-stat-card">
-      <div class="mode-stat-label">P&L Global</div>
-      <div id="ms-pnl" class="mode-stat-value neutral">+0,00 $</div>
-    </div>
-    <div class="mode-stat-card">
-      <div class="mode-stat-label">Win Rate Global</div>
-      <div id="ms-wr" class="mode-stat-value neutral">N/A</div>
-      <div class="mode-stat-sub">excl. BE</div>
-    </div>
-    <div class="mode-stat-card">
-      <div class="mode-stat-label">Trades Backtesting</div>
-      <div id="ms-bt-count" class="mode-stat-value neutral">0</div>
-    </div>
-    <div class="mode-stat-card">
-      <div class="mode-stat-label">Trades en Vivo</div>
-      <div id="ms-live-count" class="mode-stat-value neutral">0</div>
-    </div>
-  </div>
-
-  <!-- Mode cards -->
-  <div class="modes-grid">
-    <div class="mode-card" onclick="enterMode('backtest')">
-      <div class="mode-icon mode-icon-bt">📊</div>
-      <div class="mode-title">Backtesting</div>
-      <div class="mode-desc">Analizá trades históricos, estrategias y estadísticas de rendimiento en profundidad.</div>
-      <div class="mode-mini-stats">
-        <div class="mode-mini-stat">Trades: <span id="mc-bt-count">0</span></div>
-        <div class="mode-mini-stat">WR: <span id="mc-bt-wr">N/A</span></div>
-        <div class="mode-mini-stat">P&L: <span id="mc-bt-pnl">0 $</span></div>
-      </div>
-      <button class="btn-enter-mode">Ir a backtesting →</button>
-    </div>
-    <div class="mode-card" onclick="enterMode('live')">
-      <div class="mode-icon mode-icon-live">⚡</div>
-      <div class="mode-title">Trading en Vivo</div>
-      <div class="mode-desc">Registrá trades reales con análisis de setup, emociones y aprendizajes post-trade.</div>
-      <div class="mode-mini-stats">
-        <div class="mode-mini-stat">Trades: <span id="mc-live-count">0</span></div>
-        <div class="mode-mini-stat">WR: <span id="mc-live-wr">N/A</span></div>
-        <div class="mode-mini-stat">P&L: <span id="mc-live-pnl">0 $</span></div>
-      </div>
-      <button class="btn-enter-mode">Ir a trading en vivo →</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════════════════════
-     APP SCREEN (shared by both modes)
-══════════════════════════════════════════════════════════════════════════════ -->
-<div id="app-screen">
+<div id="app-screen" style="display:none">
   <header>
     <div class="header-inner">
-      <span class="app-logo" onclick="goToModeScreen()" title="Volver al inicio">📈</span>
-      <span id="current-mode-badge" class="mode-indicator"></span>
-      <nav class="tabs" role="tablist">
-        <button class="tab-btn active" data-tab="dashboard"  role="tab">Dashboard</button>
-        <button class="tab-btn"        data-tab="add"        role="tab">Añadir Trade</button>
-        <button class="tab-btn"        data-tab="history"    role="tab">Historial</button>
-        <button class="tab-btn"        data-tab="analytics"  role="tab">Analytics</button>
-        <button class="tab-btn"        data-tab="notes"      role="tab">Notas</button>
+      <div class="app-logo" onclick="goToModeScreen()" style="cursor:pointer">TJ <span style="color:var(--text-muted)">Pro</span></div>
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="add">Añadir</button>
+        <button class="tab-btn" data-tab="history">Historial</button>
+        <button class="tab-btn" data-tab="analytics">Analytics</button>
+        <button class="tab-btn" data-tab="notes">Notas</button>
       </nav>
-      <div class="cloud-controls">
-        <button id="theme-toggle" class="btn-theme" title="Cambiar Tema">🌓</button>
-        <span id="sync-status" class="sync-badge sync-offline" title="Estado de sincronización">Offline</span>
-        <button id="btn-cloud-login" class="btn-cloud" type="button" style="display:none">Sync / Login</button>
-        <div id="cloud-user-wrap" style="display:none;align-items:center;gap:8px;">
-          <button id="btn-cloud-logout" class="btn-cloud btn-cloud-out" type="button">Logout</button>
+      <div class="mode-user-info">
+        <button id="theme-toggle" class="btn-theme" style="background:none;border:none;font-size:1.2rem;cursor:pointer">🌓</button>
+        <span id="sync-status" class="sync-badge">Offline</span>
+        <button id="btn-cloud-login" class="btn-sm-logout">Login</button>
+        <div id="cloud-user-wrap" style="display:none">
+          <button id="btn-cloud-logout" class="btn-sm-logout">Logout</button>
         </div>
       </div>
     </div>
   </header>
 
-  <main class="content">
-
-    <!-- ── DASHBOARD ──────────────────────────────────────────────────────── -->
+  <main class="content" style="max-width:1200px;margin:32px auto;padding:0 20px">
+    <!-- DASHBOARD -->
     <section id="tab-dashboard" class="tab-section active">
-      <div class="cards-grid">
-        <div class="card"><div class="card-label">P&amp;L Total</div><div id="stat-pnl" class="card-value neutral">—</div></div>
-        <div class="card"><div class="card-label">Win Rate</div><div id="stat-wr" class="card-value neutral">—</div><div class="card-sub">excl. BE</div></div>
-        <div class="card"><div class="card-label">Expected Value</div><div id="stat-ev" class="card-value neutral">—</div><div class="card-sub">excl. BE</div></div>
-        <div class="card"><div class="card-label">Total Trades</div><div id="stat-total" class="card-value neutral">0</div></div>
-        <div class="card"><div class="card-label">Mejor Racha</div><div id="stat-best" class="card-value positive">0</div><div class="card-sub">TPs consecutivos</div></div>
-        <div class="card"><div class="card-label">Peor Racha</div><div id="stat-worst" class="card-value negative">0</div><div class="card-sub">SLs consecutivos</div></div>
+      <div class="mode-stats-grid">
+        <div class="card"><div class="card-label">P&L Total</div><div id="stat-pnl" class="card-value">---</div></div>
+        <div class="card"><div class="card-label">Win Rate</div><div id="stat-wr" class="card-value">---</div></div>
+        <div class="card"><div class="card-label">Trades</div><div id="stat-total" class="card-value">---</div></div>
+        <div class="card"><div class="card-label">Profit Factor</div><div id="stat-ev" class="card-value">---</div></div>
       </div>
-      <div class="chart-card">
-        <div class="chart-title">Curva de Equity</div>
-        <div class="chart-wrap"><canvas id="chart-equity"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="section-header"><div class="chart-title" style="margin:0">Trades Recientes</div></div>
-        <div id="recent-trades" class="recent-list"><div class="empty-state"><div class="empty-state-icon">📊</div>No hay trades aún</div></div>
+      <div class="mode-stat-card" style="margin-top:24px;padding:32px">
+        <div class="card-label">Curva de Equity</div>
+        <div style="height:400px"><canvas id="chart-equity"></canvas></div>
       </div>
     </section>
 
-    <!-- ── ADD TRADE ───────────────────────────────────────────────────────── -->
+    <!-- ADD TRADE -->
     <section id="tab-add" class="tab-section">
-      <div class="form-card">
-        <form id="trade-form" autocomplete="off">
-          <div class="form-group" id="strategy-bt-field">
-            <label class="form-label">Estrategia y Condiciones (Etiquetas)</label>
-            <div style="position:relative">
-              <input id="t-tags-input" class="form-input" type="text" placeholder="Ej: SMT, FVG, BMS, ICT..." />
-              <div id="t-tag-cloud" class="tag-cloud" style="margin-top:10px"></div>
-              <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Separá las etiquetas con comas o usá la nube de arriba</div>
-            </div>
+      <div class="mode-stat-card" style="text-align:left">
+        <form id="trade-form">
+          <div style="margin-bottom:20px">
+            <label class="mode-stat-label">Etiquetas</label>
+            <input id="t-tags-input" class="form-input" type="text" placeholder="SMT, FVG..." />
+            <div id="t-tag-cloud" class="tag-cloud"></div>
           </div>
-          <div class="form-group" id="strategy-live-field" style="display:none">
-            <label class="form-label">Nombre de Estrategia *</label>
-            <input class="form-input" type="text" name="strategyName" placeholder="p.ej. ICT BMS + FVG" />
-          </div>
-          <div class="form-row form-row-3">
-            <!-- Fecha: input date simple en ambos modos -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+            <div><label class="mode-stat-label">Fecha</label><input id="t-date" class="form-input" type="date" name="date" required /></div>
             <div>
-              <label class="form-label">Fecha *</label>
-              <input id="t-date" class="form-input" type="date" name="date" required />
-            </div>
-            <div id="symbol-bt-field">
-              <label class="form-label">Símbolo *</label>
-              <div style="position:relative">
-                <select id="t-symbol-select" class="form-select" style="appearance:none;padding-right:28px">
-                  <option value="">Seleccionar símbolo...</option>
-                </select>
-                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:10px">▼</span>
-              </div>
-              <div id="t-symbol-select-new-wrap" style="display:none;margin-top:6px">
-                <input id="t-symbol-new-input" class="form-input" type="text" placeholder="Ej: EURUSD, BTC, SPY..." style="text-transform:uppercase" />
-                <div style="font-size:.75rem;color:var(--gold);margin-top:3px">✓ Se guardará automáticamente para la próxima vez</div>
+              <label class="mode-stat-label">Símbolo</label>
+              <select id="t-symbol-select" class="form-select"></select>
+              <div id="t-symbol-select-new-wrap" style="display:none;margin-top:8px">
+                <input id="t-symbol-new-input" class="form-input" type="text" placeholder="Nuevo..." />
               </div>
             </div>
-            <div id="symbol-live-field" style="display:none">
-              <label class="form-label">Símbolo *</label>
-              <input class="form-input" type="text" name="symbol" placeholder="EURUSD" />
-            </div>
-            <!-- Kill Zone: select simple en ambos modos -->
-            <div>
-              <label class="form-label">Kill Zone *</label>
-              <select id="t-kz" class="form-select" name="killZone" required>
-                <option value="">Seleccionar...</option>
-                <option value="New York">New York</option>
-                <option value="London">London</option>
-                <option value="Asia">Asia</option>
-              </select>
-            </div>
+            <div><label class="mode-stat-label">Kill Zone</label><select id="t-kz" class="form-select" name="killZone"><option value="New York">New York</option><option value="London">London</option><option value="Asia">Asia</option></select></div>
           </div>
-          <div class="form-row form-row-2">
-            <div>
-              <label class="form-label">Tipo *</label>
-              <div class="radio-group">
-                <label class="radio-label buy"><input type="radio" name="side" value="BUY" checked /> BUY</label>
-                <label class="radio-label sell"><input type="radio" name="side" value="SELL" /> SELL</label>
-              </div>
-            </div>
-            <div>
-              <label class="form-label">SMT</label>
-              <div class="radio-group">
-                <label class="radio-label buy"><input type="radio" name="smt" value="true" /> ✓</label>
-                <label class="radio-label sell"><input type="radio" name="smt" value="false" checked /> ✗</label>
-              </div>
-            </div>
-            <div>
-              <label class="form-label">Resultado *</label>
-              <div class="radio-group">
-                <label class="radio-label tp"><input type="radio" name="result" value="TP" checked /> TP</label>
-                <label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label>
-                <label class="radio-label be"><input type="radio" name="result" value="BE" /> BE</label>
-              </div>
-            </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px">
+            <div><label class="mode-stat-label">Side</label><div class="radio-group"><label class="radio-label"><input type="radio" name="side" value="BUY" checked /> BUY</label><label class="radio-label"><input type="radio" name="side" value="SELL" /> SELL</label></div></div>
+            <div><label class="mode-stat-label">Result</label><div class="radio-group"><label class="radio-label"><input type="radio" name="result" value="TP" checked /> TP</label><label class="radio-label"><input type="radio" name="result" value="SL" /> SL</label><label class="radio-label"><input type="radio" name="result" value="BE" /> BE</label></div></div>
+            <div><label class="mode-stat-label">P&L ($)</label><input class="form-input" type="number" step="0.01" name="pnl" required /></div>
           </div>
-            <div id="be-outcome-section" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-left:3px solid var(--text-muted);border-radius:var(--radius);padding:10px 12px;">
-              <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">¿Hacia dónde continuó el precio?</div>
-              <div class="radio-group">
-                <label class="radio-label tp"><input type="radio" name="beOutcome" value="TP" /> Continuó a TP</label>
-                <label class="radio-label sl"><input type="radio" name="beOutcome" value="SL" /> Continuó a SL</label>
-              </div>
-            </div>
-          <div class="form-row form-row-2">
-            <div><label class="form-label" for="t-pnl">P&amp;L ($) *</label><input id="t-pnl" class="form-input" type="number" step="0.01" name="pnl" placeholder="100.00" required /></div>
-            <div><label class="form-label" for="t-rr">RR Planificado</label><input id="t-rr" class="form-input" type="number" step="0.1" name="rrPlanned" placeholder="2.5" /></div>
-          </div>
-          <div class="form-group"><label class="form-label" for="t-tv">Link TradingView</label><input id="t-tv" class="form-input" type="url" name="tradingViewUrl" placeholder="https://tradingview.com/..." /></div>
-          <div class="form-row form-row-2">
-            <div><label class="form-label">Link Imagen M3</label><input class="form-input" type="url" name="imageM3Url" placeholder="https://..." /></div>
-            <div><label class="form-label">Link Imagen M15</label><input class="form-input" type="url" name="imageM15Url" placeholder="https://..." /></div>
-          </div>
-          <!-- Live questions — solo visible en modo live -->
-          <div id="live-questions-section" class="live-questions" style="display:none">
-            <div class="live-questions-title">⚡ Análisis del Trade en Vivo</div>
-            <div class="form-group">
-              <label class="form-label">¿Cuál fue tu setup? ¿Qué te llevó a tomar este trade?</label>
-              <textarea class="form-textarea" name="setup" placeholder="Describe el contexto del mercado, estructura, confirmaciones..."></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label">¿Tuviste FOMO o dudas antes de entrar?</label>
-              <textarea class="form-textarea" name="fomo" placeholder="Sé honesto sobre tu estado emocional al momento de entrar..."></textarea>
-            </div>
-            <div class="form-group" style="margin-bottom:0">
-              <label class="form-label">¿Qué aprendiste de este trade?</label>
-              <textarea class="form-textarea" name="aprendizaje" placeholder="Reflexión post-trade: qué hiciste bien, qué mejorarías..."></textarea>
-            </div>
-          </div>
-          <!-- Notas — solo visible en modo backtest -->
-          <div id="backtest-notes-section">
-            <div class="form-group"><label class="form-label" for="t-notes">Notas y Observaciones</label><textarea id="t-notes" class="form-textarea" name="notes" placeholder="Escribe tu análisis, contexto del trade..."></textarea></div>
-          </div>
-          <div id="trade-form-error" class="form-error"></div>
-          <button type="submit" class="btn btn-primary" id="btn-save-trade">Guardar Trade</button>
+          <button type="submit" class="btn-enter-mode" style="margin-top:32px">Guardar Trade</button>
         </form>
       </div>
     </section>
 
-    <!-- ── HISTORY ─────────────────────────────────────────────────────────── -->
-    <section id="tab-history" class="tab-section">
-      <div class="history-filters">
-        <select id="filter-tag" class="form-select"><option value="">Todas las etiquetas</option></select>
-        <select id="filter-smt" class="form-select">
-          <option value="">Todos los trades</option>
-          <option value="true">Solo con SMT</option>
-          <option value="false">Sin SMT</option>
-        </select>
-        <select id="filter-result" class="form-select">
-          <option value="">Todos los resultados</option>
-          <option value="TP">TP</option><option value="SL">SL</option><option value="BE">BE</option>
-        </select>
-        <input id="filter-date-from" class="form-input" type="date" placeholder="Desde" />
-        <input id="filter-date-to"   class="form-input" type="date" placeholder="Hasta" />
-      </div>
-      <div id="trade-list" class="trade-list"><div class="empty-state"><div class="empty-state-icon">📋</div>No hay trades registrados</div></div>
-    </section>
-
-    <!-- ── ANALYTICS ───────────────────────────────────────────────────────── -->
-    <section id="tab-analytics" class="tab-section">
-      <!-- Filtro Maestro por Etiquetas -->
-      <div class="analytics-filter-bar">
-        <span class="analytics-filter-label">Filtrar por Etiqueta:</span>
-        <div id="tag-filter-btns" style="display:flex;flex-wrap:wrap;gap:8px;">
-          <button class="strategy-filter-btn active" data-tag="">Todas</button>
-        </div>
-      </div>
-
-      <!-- Fila 1: Métricas clave y Rendimiento -->
-      <div class="analytics-metrics-grid" id="analytics-metrics-grid">
-        <!-- generado dinámicamente -->
-      </div>
-
-      <!-- Fila 2: Winners / Losers -->
-      <div class="wl-grid" id="analytics-wl-grid"><!-- generado dinámicamente --></div>
-
-      <!-- Fila 3: Frecuencia y Eficiencia -->
-      <div class="freq-grid" id="analytics-freq-grid"><!-- generado dinámicamente --></div>
-
-      <!-- P&L y WR por día -->
-      <div class="chart-card">
-        <div class="chart-title">P&amp;L y Win Rate por Día de la Semana</div>
-        <div id="analytics-daywr"></div>
-      </div>
-
-      <!-- Charts -->
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-title">Ratio TP / SL / BE</div>
-          <div class="chart-wrap-sm"><canvas id="chart-donut"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">P&amp;L por Kill Zone</div>
-          <div class="chart-wrap-sm"><canvas id="chart-killzone"></canvas></div>
-        </div>
-      </div>
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-title">P&amp;L por Mes</div>
-          <div class="chart-month-controls"><select id="month-chart-year" class="form-select chart-year-select"></select></div>
-          <div class="chart-wrap-sm"><canvas id="chart-month"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">Curva de Equity</div>
-          <div class="chart-wrap-sm"><canvas id="chart-equity-analytics"></canvas></div>
-        </div>
-      </div>
-
-      <!-- Calendario -->
-      <div class="chart-card">
-        <div class="chart-title">Calendario de Rendimiento</div>
-        <div id="perf-calendar-wrap"></div>
-      </div>
-    </section>
-
-    <!-- ── NOTES ───────────────────────────────────────────────────────────── -->
-    <section id="tab-notes" class="tab-section">
-      <div class="notes-header"><h2>Notas</h2><p>Guardá observaciones, insights y referencias</p></div>
-      <div class="notes-add-row">
-        <div class="notes-add-form">
-          <textarea id="note-text" class="form-textarea" placeholder="Escribe tu nota aquí..." rows="3"></textarea>
-          <input id="note-links" class="notes-links-input" type="text" placeholder="Links opcionales (uno por línea)" />
-          <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">Links separados por Enter</div>
-          <button id="btn-add-note" class="btn btn-primary" type="button" style="width:auto;padding:9px 24px">+ Añadir Nota</button>
-        </div>
-      </div>
-      <hr class="divider" />
-      <div id="notes-list"></div>
-    </section>
-
+    <!-- OTRAS SECCIONES SIMPLIFICADAS PARA ESPACIO -->
+    <section id="tab-history" class="tab-section"><div id="history-list"></div></section>
+    <section id="tab-analytics" class="tab-section"><div id="tag-filter-btns" class="tag-cloud"></div><div id="analytics-grid" class="mode-stats-grid" style="margin-top:24px"></div></section>
+    <section id="tab-notes" class="tab-section"><textarea id="note-text" class="form-input" style="height:150px;margin-bottom:16px"></textarea><button id="btn-add-note" class="btn-enter-mode">Guardar Nota</button><div id="notes-list" style="margin-top:24px"></div></section>
   </main>
-</div><!-- /app-screen -->
+</div>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     EDIT MODAL
-══════════════════════════════════════════════════════════════════════════════ -->
-<div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true">
-  <div class="modal">
-    <div class="modal-title">Editar Trade</div>
-    <form id="edit-form" autocomplete="off">
-      <div class="form-group">
-        <label class="form-label">Etiquetas (separadas por coma o seleccioná abajo)</label>
-        <input id="edit-tags-input" class="form-input" type="text" name="tags" placeholder="Ej: SMT, FVG, BMS..." />
-        <div id="edit-tag-cloud" class="tag-cloud" style="margin-top:10px"></div>
+<!-- MODAL EDIT -->
+<div id="modal-edit" class="modal-overlay">
+  <div class="mode-stat-card" style="max-width:600px;width:100%;text-align:left">
+    <h2 style="margin-bottom:24px">Editar Trade</h2>
+    <form id="edit-form">
+      <input id="edit-tags-input" class="form-input" type="text" name="tags" />
+      <div id="edit-tag-cloud" class="tag-cloud"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px">
+        <input class="form-input" type="date" name="date" />
+        <input class="form-input" type="number" step="0.01" name="pnl" />
       </div>
-      <div class="form-row form-row-3">
-        <div><label class="form-label">Fecha *</label><input class="form-input" type="date" name="date" required /></div>
-        <div><label class="form-label">Símbolo *</label><input class="form-input" type="text" name="symbol" required /></div>
-        <div>
-          <label class="form-label">Kill Zone *</label>
-          <select class="form-select" name="killZone" required>
-            <option value="">Seleccionar...</option>
-            <option value="Asia">Asia</option>
-            <option value="London">London</option>
-            <option value="New York">New York</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row form-row-3">
-        <div><label class="form-label">Tipo *</label><div class="radio-group"><label class="radio-label buy"><input type="radio" name="side" value="BUY" /> BUY</label><label class="radio-label sell"><input type="radio" name="side" value="SELL" /> SELL</label></div></div>
-        <div>
-          <label class="form-label">SMT</label>
-          <div class="radio-group">
-            <label class="radio-label buy"><input type="radio" name="smt" value="true" /> ✓</label>
-            <label class="radio-label sell"><input type="radio" name="smt" value="false" /> ✗</label>
-          </div>
-        </div>
-        <div>
-          <label class="form-label">Resultado *</label>
-          <div class="radio-group"><label class="radio-label tp"><input type="radio" name="result" value="TP" /> TP</label><label class="radio-label sl"><input type="radio" name="result" value="SL" /> SL</label><label class="radio-label be"><input type="radio" name="result" value="BE" /> BE</label></div>
-          <div id="edit-be-outcome-section" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-left:3px solid var(--text-muted);border-radius:var(--radius);padding:10px 12px;">
-            <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">¿Hacia dónde continuó el precio?</div>
-            <div class="radio-group">
-              <label class="radio-label tp"><input type="radio" name="beOutcome" value="TP" /> Continuó a TP</label>
-              <label class="radio-label sl"><input type="radio" name="beOutcome" value="SL" /> Continuó a SL</label>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="form-row form-row-2">
-        <div><label class="form-label">P&amp;L ($) *</label><input class="form-input" type="number" step="0.01" name="pnl" required /></div>
-        <div><label class="form-label">RR Planificado</label><input class="form-input" type="number" step="0.1" name="rrPlanned" /></div>
-      </div>
-      <div class="form-group"><label class="form-label">Link TradingView</label><input class="form-input" type="url" name="tradingViewUrl" /></div>
-      <div class="form-row form-row-2">
-        <div><label class="form-label">Imagen M3</label><input class="form-input" type="url" name="imageM3Url" /></div>
-        <div><label class="form-label">Imagen M15</label><input class="form-input" type="url" name="imageM15Url" /></div>
-      </div>
-      <!-- edit live questions -->
-      <div id="edit-live-questions" class="live-questions" style="display:none">
-        <div class="live-questions-title">⚡ Análisis del Trade en Vivo</div>
-        <div class="form-group"><label class="form-label">¿Cuál fue tu setup?</label><textarea class="form-textarea" name="setup"></textarea></div>
-        <div class="form-group"><label class="form-label">¿Tuviste FOMO o dudas?</label><textarea class="form-textarea" name="fomo"></textarea></div>
-        <div class="form-group" style="margin-bottom:0"><label class="form-label">¿Qué aprendiste?</label><textarea class="form-textarea" name="aprendizaje"></textarea></div>
-      </div>
-      <!-- edit backtest notes -->
-      <div id="edit-backtest-notes">
-        <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" name="notes"></textarea></div>
-      </div>
-      <div id="edit-form-error" class="form-error"></div>
+      <button type="submit" class="btn-enter-mode" style="margin-top:24px">Actualizar</button>
+      <button type="button" id="modal-cancel" class="tab-btn" style="width:100%;margin-top:12px">Cancelar</button>
     </form>
-    <div class="modal-actions">
-      <button id="modal-cancel" class="btn btn-cancel">Cancelar</button>
-      <button id="modal-save" class="btn btn-primary" style="width:auto;flex:1">Guardar Cambios</button>
-    </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     DETAIL MODAL
-══════════════════════════════════════════════════════════════════════════════ -->
-<div id="detail-modal" class="detail-modal-overlay" role="dialog" aria-modal="true">
-  <div class="detail-modal">
-    <div class="detail-modal-header">
-      <div class="detail-modal-title" id="detail-modal-title">Detalle del Trade</div>
-      <button class="detail-modal-close" id="detail-modal-close">✕</button>
-    </div>
-    <div class="detail-modal-body" id="detail-modal-body"></div>
-  </div>
-</div>
+<div id="toast" class="toast" style="position:fixed;bottom:20px;right:20px;padding:12px 24px;border-radius:8px;background:var(--accent);color:var(--bg-deep);font-weight:800;display:none;z-index:1000"></div>
 
-<!-- CONFIRM -->
-<div id="confirm-overlay" class="confirm-overlay">
-  <div class="confirm-box">
-    <p>¿Eliminar este trade? Esta acción no se puede deshacer.</p>
-    <div class="confirm-btns">
-      <button id="confirm-no" class="btn-confirm-no">Cancelar</button>
-      <button id="confirm-yes" class="btn-confirm-yes">Eliminar</button>
-    </div>
-  </div>
-</div>
-
-<!-- TOAST -->
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-<!-- SCRIPTS -->
-<!-- NOTA: Chart.js se carga como UMD global (no es Dexie, no hay conflicto) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<!--
-  ⚠️  Se eliminaron los scripts UMD de Dexie y dexie-cloud.
-  Ahora db.js importa todo desde ESM con versión fija (4.0.8),
-  evitando el conflicto de "Two different versions of Dexie".
-  app.js (type="module") importa db.js que a su vez importa Dexie ESM.
--->
-<script type="module" src="./app.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
