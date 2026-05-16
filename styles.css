@@ -196,6 +196,18 @@ header {
 }
 .tab-btn.active { background: var(--accent); color: var(--bg-deep); }
 
+.tab-section {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+.tab-section.active {
+  display: block;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ── MISC ────────────────────────────────────────────────────────────────── */
 .sync-badge { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; background: rgba(0,0,0,0.2); }
 .btn-sm-logout { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 5px 12px; border-radius: 8px; cursor: pointer; }

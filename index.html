@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* Estilo de emergencia para asegurar que los modales no bloqueen el inicio */
+    /* Prevent UI bugs */
     .modal-overlay { display: none !important; }
     .modal-overlay.open { display: flex !important; }
   </style>
@@ -45,7 +45,7 @@
       <div class="app-logo">Trading Journal <span style="color:var(--text-muted)">Pro</span></div>
       <div class="mode-user-info">
         <span class="sync-badge" id="mode-sync-status">Offline</span>
-        <button class="btn-sm-logout" onclick="db.cloud.logout()">Logout</button>
+        <button class="btn-sm-logout" id="btn-mode-logout">Logout</button>
       </div>
     </div>
 
@@ -61,12 +61,12 @@
       </div>
       <div class="mode-stat-card">
         <div class="mode-stat-label">Backtesting</div>
-        <div id="ms-count-bt" class="mode-stat-value">---</div>
+        <div id="ms-bt-count" class="mode-stat-value">---</div>
         <div class="mode-stat-sub">trades</div>
       </div>
       <div class="mode-stat-card">
         <div class="mode-stat-label">Live</div>
-        <div id="ms-count-live" class="mode-stat-value">---</div>
+        <div id="ms-live-count" class="mode-stat-value">---</div>
         <div class="mode-stat-sub">trades</div>
       </div>
     </div>
@@ -76,13 +76,15 @@
         <div class="mode-icon">📊</div>
         <h3 class="mode-title">Backtesting</h3>
         <p class="mode-desc">Analizá trades históricos y perfeccioná tu estrategia.</p>
-        <button class="btn-enter-mode">Ir a Backtesting →</button>
+        <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-bt-count">0</span> | P&L: <span id="mc-bt-pnl">0</span> | WR: <span id="mc-bt-wr">0</span></div>
+        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Backtesting →</button>
       </div>
       <div class="mode-card-item" onclick="enterMode('live')">
         <div class="mode-icon">⚡</div>
         <h3 class="mode-title">Trading en Vivo</h3>
         <p class="mode-desc">Registrá tus sesiones reales y analizá tu psicología.</p>
-        <button class="btn-enter-mode">Ir a Live →</button>
+        <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-live-count">0</span> | P&L: <span id="mc-live-pnl">0</span> | WR: <span id="mc-live-wr">0</span></div>
+        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Live →</button>
       </div>
     </div>
   </div>
@@ -92,6 +94,7 @@
   <header>
     <div class="header-inner">
       <div class="app-logo" onclick="goToModeScreen()" style="cursor:pointer">TJ <span style="color:var(--text-muted)">Pro</span></div>
+      <span id="current-mode-badge" class="sync-badge" style="background:var(--accent);color:var(--bg-deep)"></span>
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
         <button class="tab-btn" data-tab="add">Añadir</button>
@@ -111,25 +114,33 @@
   </header>
 
   <main class="content" style="max-width:1200px;margin:32px auto;padding:0 20px">
+    <!-- DASHBOARD -->
     <section id="tab-dashboard" class="tab-section active">
       <div class="mode-stats-grid">
         <div class="card"><div class="card-label">P&L Total</div><div id="stat-pnl" class="card-value">---</div></div>
-        <div class="card"><div class="card-label">Win Rate</div><div id="stat-wr" class="card-value">---</div></div>
-        <div class="card"><div class="card-label">Trades</div><div id="stat-total" class="card-value">---</div></div>
-        <div class="card"><div class="card-label">Profit Factor</div><div id="stat-ev" class="card-value">---</div></div>
+        <div class="card"><div class="card-label">Win Rate</div><div id="stat-wr" class="card-value">---</div><div class="card-sub">excl. BE</div></div>
+        <div class="card"><div class="card-label">Expected Value</div><div id="stat-ev" class="card-value">---</div><div class="card-sub">excl. BE</div></div>
+        <div class="card"><div class="card-label">Total Trades</div><div id="stat-total" class="card-value">---</div></div>
+        <div class="card"><div class="card-label">Mejor Racha</div><div id="stat-best" class="card-value positive">---</div><div class="card-sub">TPs consecutivos</div></div>
+        <div class="card"><div class="card-label">Peor Racha</div><div id="stat-worst" class="card-value negative">---</div><div class="card-sub">SLs consecutivos</div></div>
       </div>
       <div class="mode-stat-card" style="margin-top:24px;padding:32px">
         <div class="card-label">Curva de Equity</div>
         <div style="height:400px"><canvas id="chart-equity"></canvas></div>
       </div>
+      <div class="mode-stat-card" style="margin-top:24px;padding:32px">
+        <div class="card-label" style="text-align:left;margin-bottom:16px;">Trades Recientes</div>
+        <div id="recent-trades" style="text-align:left;"></div>
+      </div>
     </section>
 
+    <!-- ADD TRADE -->
     <section id="tab-add" class="tab-section">
       <div class="mode-stat-card" style="text-align:left">
         <form id="trade-form">
           <div style="margin-bottom:20px">
-            <label class="mode-stat-label">Etiquetas</label>
-            <input id="t-tags-input" class="form-input" type="text" placeholder="SMT, FVG..." />
+            <label class="mode-stat-label">Etiquetas (Estrategia y Condiciones)</label>
+            <input id="t-tags-input" class="form-input" type="text" placeholder="Ej: SMT, FVG, BMS..." />
             <div id="t-tag-cloud" class="tag-cloud"></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
@@ -138,24 +149,89 @@
               <label class="mode-stat-label">Símbolo</label>
               <select id="t-symbol-select" class="form-select"></select>
               <div id="t-symbol-select-new-wrap" style="display:none;margin-top:8px">
-                <input id="t-symbol-new-input" class="form-input" type="text" placeholder="Nuevo..." />
+                <input id="t-symbol-new-input" class="form-input" type="text" placeholder="Nuevo símbolo..." style="text-transform:uppercase" />
               </div>
             </div>
             <div><label class="mode-stat-label">Kill Zone</label><select id="t-kz" class="form-select" name="killZone"><option value="New York">New York</option><option value="London">London</option><option value="Asia">Asia</option></select></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px">
-            <div><label class="mode-stat-label">Side</label><div class="radio-group"><label class="radio-label"><input type="radio" name="side" value="BUY" checked /> BUY</label><label class="radio-label"><input type="radio" name="side" value="SELL" /> SELL</label></div></div>
-            <div><label class="mode-stat-label">Result</label><div class="radio-group"><label class="radio-label"><input type="radio" name="result" value="TP" checked /> TP</label><label class="radio-label"><input type="radio" name="result" value="SL" /> SL</label><label class="radio-label"><input type="radio" name="result" value="BE" /> BE</label></div></div>
-            <div><label class="mode-stat-label">P&L ($)</label><input class="form-input" type="number" step="0.01" name="pnl" required /></div>
+            <div>
+              <label class="mode-stat-label">Side</label>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="side" value="BUY" checked /> BUY</label>
+                <label class="radio-label"><input type="radio" name="side" value="SELL" /> SELL</label>
+              </div>
+            </div>
+            <div>
+              <label class="mode-stat-label">SMT</label>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="smt" value="true" /> ✓</label>
+                <label class="radio-label"><input type="radio" name="smt" value="false" checked /> ✗</label>
+              </div>
+            </div>
+            <div>
+              <label class="mode-stat-label">Resultado</label>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="result" value="TP" checked /> TP</label>
+                <label class="radio-label"><input type="radio" name="result" value="SL" /> SL</label>
+                <label class="radio-label"><input type="radio" name="result" value="BE" /> BE</label>
+              </div>
+            </div>
           </div>
+          <div id="be-outcome-section" style="display:none;margin-top:10px;padding:10px;background:var(--bg-input);border-radius:var(--radius);">
+            <div class="mode-stat-label">¿Hacia dónde continuó el precio?</div>
+            <div class="radio-group">
+              <label class="radio-label"><input type="radio" name="beOutcome" value="TP" /> TP</label>
+              <label class="radio-label"><input type="radio" name="beOutcome" value="SL" /> SL</label>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px">
+            <div><label class="mode-stat-label">P&L ($)</label><input class="form-input" type="number" step="0.01" name="pnl" required /></div>
+            <div><label class="mode-stat-label">RR Planeado (Opcional)</label><input class="form-input" type="number" step="0.01" name="rrPlanned" /></div>
+          </div>
+          <div style="margin-top:20px"><label class="mode-stat-label">URL Imagen (Opcional)</label><input class="form-input" type="text" name="imageM3Url" /></div>
+          <div id="trade-form-error" style="color:var(--red);margin-top:10px;"></div>
           <button type="submit" class="btn-enter-mode" style="margin-top:32px">Guardar Trade</button>
         </form>
       </div>
     </section>
 
-    <section id="tab-history" class="tab-section"><div id="history-list"></div></section>
-    <section id="tab-analytics" class="tab-section"><div id="tag-filter-btns" class="tag-cloud"></div><div id="analytics-grid" class="mode-stats-grid" style="margin-top:24px"></div></section>
-    <section id="tab-notes" class="tab-section"><textarea id="note-text" class="form-input" style="height:150px;margin-bottom:16px"></textarea><button id="btn-add-note" class="btn-enter-mode">Guardar Nota</button><div id="notes-list" style="margin-top:24px"></div></section>
+    <!-- HISTORY -->
+    <section id="tab-history" class="tab-section">
+      <div class="mode-stat-card" style="margin-bottom:24px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px,1fr));gap:12px">
+          <select id="filter-tag" class="form-select"></select>
+          <select id="filter-result" class="form-select"><option value="">Cualquier resultado</option><option value="TP">TP</option><option value="SL">SL</option><option value="BE">BE</option></select>
+          <select id="filter-smt" class="form-select"><option value="">SMT (Cualquiera)</option><option value="true">Sí (✓)</option><option value="false">No (✗)</option></select>
+          <input id="filter-date-from" type="date" class="form-input" title="Desde" />
+          <input id="filter-date-to" type="date" class="form-input" title="Hasta" />
+        </div>
+      </div>
+      <div id="trade-list"></div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section id="tab-analytics" class="tab-section">
+      <div class="mode-stat-card">
+        <div class="card-label" style="text-align:left">Filtrar por Etiquetas (Confluencias)</div>
+        <div id="tag-filter-btns" class="tag-cloud"></div>
+      </div>
+      <div id="analytics-grid" class="mode-stats-grid" style="margin-top:24px"></div>
+      <div class="mode-stat-card" style="margin-top:24px">
+        <div class="card-label">P&L Mensual</div>
+        <select id="month-chart-year" class="form-select" style="max-width:120px;margin-bottom:16px"></select>
+        <div style="height:300px"><canvas id="chart-month"></canvas></div>
+      </div>
+    </section>
+
+    <!-- NOTES -->
+    <section id="tab-notes" class="tab-section">
+      <div class="mode-stat-card">
+        <textarea id="note-text" class="form-input" style="height:150px;margin-bottom:16px" placeholder="Reflexión de hoy..."></textarea>
+        <button id="btn-add-note" class="btn-enter-mode">Guardar Nota</button>
+      </div>
+      <div id="notes-list" style="margin-top:24px"></div>
+    </section>
   </main>
 </div>
 
@@ -168,7 +244,11 @@
       <div id="edit-tag-cloud" class="tag-cloud"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px">
         <input class="form-input" type="date" name="date" />
+        <input class="form-input" type="text" name="symbol" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px">
         <input class="form-input" type="number" step="0.01" name="pnl" />
+        <select class="form-select" name="result"><option value="TP">TP</option><option value="SL">SL</option><option value="BE">BE</option></select>
       </div>
       <button type="submit" class="btn-enter-mode" style="margin-top:24px">Actualizar</button>
       <button type="button" id="modal-cancel" class="tab-btn" style="width:100%;margin-top:12px">Cancelar</button>
@@ -181,7 +261,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module">
   import { boot } from './app.js';
-  // Forzar inicio si DOM ya cargó
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {
