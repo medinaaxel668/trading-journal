@@ -1,5 +1,5 @@
-import Dexie from 'dexie';
-import dexieCloud from 'dexie-cloud-addon';
+import Dexie from 'https://esm.sh/dexie@4.0.8';
+import dexieCloud from 'https://esm.sh/dexie-cloud-addon@4.0.8';
 const DB_NAME  = 'tradingAppDB';
 const CLOUD_URL = 'https://zs0gyiyrz.dexie.cloud';
 
