@@ -27,6 +27,7 @@ async function boot() {
   bindCloudUI();
   bindLoginUI();
   checkSession();
+  await migrateTradesToTags();
 }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
@@ -226,6 +227,31 @@ function bindModeLogout() {
     if (db && db.cloud) db.cloud.logout({deleteLocalData:false}).catch(()=>{});
     else showLoginScreen();
   };
+}
+
+async function migrateTradesToTags() {
+  const bt = await getAllTrades().catch(()=>[]);
+  const live = await getAllLiveTrades().catch(()=>[]);
+  let migrated = 0;
+  
+  for (const t of bt) {
+    if ((!t.tags || t.tags.length === 0) && t.strategyName) {
+      t.tags = [t.strategyName];
+      await updateTrade(t.id, t);
+      migrated++;
+    }
+  }
+  for (const t of live) {
+    if ((!t.tags || t.tags.length === 0) && t.strategyName) {
+      t.tags = [t.strategyName];
+      await updateLiveTrade(t.id, t);
+      migrated++;
+    }
+  }
+  if (migrated > 0) {
+    console.log(`[Migration] ${migrated} trades migrados a etiquetas.`);
+    await loadData(); renderAll();
+  }
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────────
@@ -716,8 +742,16 @@ function openEditModal(id) {
   state.editingTradeId=id;
   const f=document.getElementById('edit-form');
   const set=(name,val)=>{const el=f.querySelector(`[name="${name}"]`);if(el)el.value=val??'';};
-  setRadio('side',t.side);setRadio('result',t.result);
-  set('pnl',t.pnl);set('rrPlanned',t.rrPlanned??'');
+  const setRadio=(name,val)=>f.querySelectorAll(`[name="${name}"]`).forEach(r=>{r.checked=String(r.value)===String(val);});
+  
+  set('date',t.date);
+  set('symbol',t.symbol);
+  set('killZone',t.killZone);
+  setRadio('side',t.side);
+  setRadio('result',t.result);
+  setRadio('smt', t.smt);
+  set('pnl',t.pnl);
+  set('rrPlanned',t.rrPlanned??'');
   set('tags', (t.tags||[]).join(', '));
   set('tradingViewUrl',t.tradingViewUrl);set('imageM3Url',t.imageM3Url);set('imageM15Url',t.imageM15Url);
   // BE outcome
