@@ -1110,6 +1110,7 @@ function renderPerfCalendar(trades){
 }
 
 function renderDonutChart(wins,losses,bes){
+  if (!window.Chart) { setTimeout(() => renderDonutChart(wins,losses,bes), 300); return; }
   const ctx=document.getElementById('chart-donut'); if(!ctx)return;
   destroyChart('donut');
   if(wins+losses+bes===0)return;
@@ -1123,6 +1124,7 @@ function renderDonutChart(wins,losses,bes){
 }
 
 function renderKillZoneChart(trades){
+  if (!window.Chart) { setTimeout(() => renderKillZoneChart(trades), 300); return; }
   const ctx=document.getElementById('chart-killzone'); if(!ctx)return;
   destroyChart('killzone');
   const map=groupBy(trades,t=>t.killZone),labels=Object.keys(map);
@@ -1132,6 +1134,7 @@ function renderKillZoneChart(trades){
 }
 
 function renderMonthChart(trades){
+  if (!window.Chart) { setTimeout(() => renderMonthChart(trades), 300); return; }
   const ctx=document.getElementById('chart-month'); if(!ctx)return;
   const sel=document.getElementById('month-chart-year');
   if(sel){

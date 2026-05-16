@@ -211,11 +211,51 @@
         <div class="card-label" style="text-align:left">Filtrar por Etiquetas (Confluencias)</div>
         <div id="tag-filter-btns" class="tag-cloud"></div>
       </div>
-      <div id="analytics-grid" class="mode-stats-grid" style="margin-top:24px"></div>
+      
+      <!-- Metrics Grid -->
+      <div id="analytics-metrics-grid" class="mode-stats-grid" style="margin-top:24px"></div>
+
+      <!-- Winners / Losers Grid -->
+      <div id="analytics-wl-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;"></div>
+
+      <!-- Freq Grid -->
+      <div id="analytics-freq-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:24px;margin-top:24px;"></div>
+
+      <!-- Day WR -->
+      <div class="mode-stat-card" style="margin-top:24px">
+        <div class="card-label" style="text-align:left">Win Rate por Día de la Semana</div>
+        <div id="analytics-daywr"></div>
+      </div>
+
+      <!-- Donut & Kill Zone -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin-top:24px">
+        <div class="mode-stat-card">
+          <div class="card-label">Resultados (TP vs SL vs BE)</div>
+          <div style="height:250px"><canvas id="chart-donut"></canvas></div>
+        </div>
+        <div class="mode-stat-card">
+          <div class="card-label">P&L por Kill Zone</div>
+          <div style="height:250px"><canvas id="chart-killzone"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Equity Analytics -->
+      <div class="mode-stat-card" style="margin-top:24px">
+        <div class="card-label">Curva de Equity (Filtrada)</div>
+        <div style="height:350px"><canvas id="chart-equity-analytics"></canvas></div>
+      </div>
+
+      <!-- Month Chart -->
       <div class="mode-stat-card" style="margin-top:24px">
         <div class="card-label">P&L Mensual</div>
         <select id="month-chart-year" class="form-select" style="max-width:120px;margin-bottom:16px"></select>
         <div style="height:300px"><canvas id="chart-month"></canvas></div>
+      </div>
+
+      <!-- Perf Calendar -->
+      <div class="mode-stat-card" style="margin-top:24px">
+        <div class="card-label">Calendario de Rendimiento</div>
+        <div id="perf-calendar-wrap"></div>
       </div>
     </section>
 
