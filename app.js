@@ -942,11 +942,20 @@ function renderAnalytics() {
     'dd-freq':   () => metricCard('dd-freq', 'Frecuencia DD', m.ddCount, 'neutral', 'veces', 'Cuántas veces entraste en DD.'),
     'dd-rec':    () => metricCard('dd-rec', 'Recuperación', m.avgDD.toFixed(1), 'neutral', 'días prom.', 'Tiempo promedio para salir de un DD.'),
     'freq-w':    () => metricCard('freq-w', 'Trades / Sem', m.tradesPerWeek.toFixed(1), 'neutral', 'promedio', 'Promedio de trades por semana.'),
-    'freq-m':    () => metricCard('freq-m', 'Trades / Mes', m.tradesPerMonth.toFixed(1), 'neutral', 'promedio', 'Promedio de trades por mes.')
+    'freq-m':    () => metricCard('freq-m', 'Trades / Mes', m.tradesPerMonth.toFixed(1), 'neutral', 'promedio', 'Promedio de trades por mes.'),
+    'smt':       () => {
+      const smtTrades = trades.filter(t => t.smt === true);
+      const smtMetrics = computeMetrics(smtTrades);
+      const modeLabel = state.mode === 'live' ? 'SMT (Live)' : 'SMT (Backtest)';
+      const smtWr = smtTrades.length > 0 && smtMetrics.winRate !== null ? fmtPct(smtMetrics.winRate) : 'N/A';
+      const smtPf = smtTrades.length > 0 && smtMetrics.profitFactor !== null ? smtMetrics.profitFactor.toFixed(2) : '—';
+      const smtSub = smtTrades.length > 0 ? `${smtPf} PF · ${smtTrades.length} trades` : 'Sin datos';
+      return metricCard('smt', modeLabel, smtWr, smtTrades.length>0?colorClass(smtMetrics.winRate!==null?smtMetrics.winRate-.5:0):'neutral', smtSub, 'Métricas (Win Rate y Profit Factor) de trades con SMT.');
+    }
   };
 
-  const STORAGE_ORDER = 'journal_analytics_order_v3';
-  const defaultOrder = ['pnl','wr','pf','ev','rr','best','worst','be-tp','be-sl','streak-b','streak-w','total','dd','dd-freq','dd-rec','freq-w','freq-m'];
+  const STORAGE_ORDER = 'journal_analytics_order_v4';
+  const defaultOrder = ['pnl','wr','pf','ev','rr','best','worst','be-tp','be-sl','streak-b','streak-w','total','dd','dd-freq','dd-rec','freq-w','freq-m','smt'];
   let savedOrder = JSON.parse(localStorage.getItem(STORAGE_ORDER) || 'null');
   if(!savedOrder) savedOrder = defaultOrder;
 
@@ -977,25 +986,7 @@ function renderAnalytics() {
     </div>`;
   }
 
-  // ── Frecuencia (freq-grid)
-  const smtTrades = trades.filter(t => t.smt === true);
-  const smtMetrics = computeMetrics(smtTrades);
-  const modeLabel = state.mode === 'live' ? 'SMT (Live)' : 'SMT (Backtest)';
-  const smtWr = smtTrades.length > 0 && smtMetrics.winRate !== null ? fmtPct(smtMetrics.winRate) : 'N/A';
-  const smtPf = smtTrades.length > 0 && smtMetrics.profitFactor !== null ? smtMetrics.profitFactor.toFixed(2) : '—';
-  const smtSub = smtTrades.length > 0 ? `${smtPf} PF · ${smtTrades.length} trades` : 'Sin datos SMT';
-
-  const freqGrid=document.getElementById('analytics-freq-grid');
-  if(freqGrid) {
-    freqGrid.innerHTML=`
-      <div class="freq-card" draggable="true" data-id="smt"><div class="freq-label">${modeLabel}</div><div class="freq-value ${smtTrades.length>0?colorClass(smtMetrics.winRate!==null?smtMetrics.winRate-.5:0):'neutral'}">${smtWr}</div><div class="freq-label" style="margin-top:2px">${smtSub}</div></div>
-      <div class="freq-card" draggable="true" data-id="time-rec"><div class="freq-label">Tiempo Recuperación</div><div class="freq-value">${m.avgDD>0?m.avgDD.toFixed(1)+' días':'—'}</div></div>
-      <div class="freq-card" draggable="true" data-id="dd-freq"><div class="freq-label">Frecuencia DD</div><div class="freq-value">${m.ddCount} veces</div></div>
-      <div class="freq-card" draggable="true" data-id="t-day"><div class="freq-label">Trades / día (prom.)</div><div class="freq-value">${m.tradesPerDay.toFixed(1)}</div></div>
-      <div class="freq-card" draggable="true" data-id="t-week"><div class="freq-label">Trades / semana (prom.)</div><div class="freq-value">${m.tradesPerWeek.toFixed(1)}</div></div>
-      <div class="freq-card" draggable="true" data-id="t-month"><div class="freq-label">Trades / mes (prom.)</div><div class="freq-value">${m.tradesPerMonth.toFixed(1)}</div></div>`;
-    initDraggableGrid(freqGrid, 'journal_freq_order');
-  }
+  // ── Se han eliminado las tarjetas redundantes de frecuencia aquí ──
 
   renderDayWR(trades);
   renderDonutChart(m.wins.length,m.losses.length,m.bes.length);
