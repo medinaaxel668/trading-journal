@@ -143,7 +143,7 @@ function setupModeUI() {
   const symLive   = document.getElementById('symbol-live-field');
 
   if (state.mode === 'live') {
-    badge.textContent = '⚡ Live';
+    badge.textContent = '📈 Live';
     badge.className   = 'mode-indicator badge-mode-live';
     if (liveQ)    liveQ.style.display    = 'block';
     if (btNotes)  btNotes.style.display  = 'none';
@@ -159,7 +159,7 @@ function setupModeUI() {
       dateInput.value = new Date().toISOString().split('T')[0];
     }
   } else {
-    badge.textContent = '📊 Backtesting';
+    badge.textContent = '📈 Backtesting';
     badge.className   = 'mode-indicator badge-mode-bt';
     if (liveQ)    liveQ.style.display    = 'none';
     if (btNotes)  btNotes.style.display  = 'block';
