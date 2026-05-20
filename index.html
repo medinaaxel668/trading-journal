@@ -387,6 +387,19 @@
   </div>
 </div>
 
+<!-- ── CONFIRM DELETE OVERLAY ──────────────────────────────────────────── -->
+<div id="confirm-overlay" class="modal-overlay">
+  <div class="confirm-dialog" style="background:var(--bg-card,#1a1a2e);border:1px solid var(--border,#333);border-radius:12px;padding:32px;max-width:380px;width:90%;text-align:center">
+    <div style="font-size:2rem;margin-bottom:12px">🗑️</div>
+    <h3 style="margin:0 0 8px;font-size:1.1rem">¿Eliminar este trade?</h3>
+    <p style="margin:0 0 24px;color:var(--text-muted,#888);font-size:.9rem">Esta acción no se puede deshacer.</p>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button id="confirm-yes" class="btn" style="background:var(--red,#f44336);color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-weight:600">Eliminar</button>
+      <button id="confirm-no" class="btn" style="background:var(--bg-input,#1a1a1a);color:var(--text,#e0e0e0);border:1px solid var(--border,#444);padding:10px 28px;border-radius:8px;cursor:pointer;font-weight:600">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" style="position:fixed;bottom:20px;right:20px;padding:12px 24px;border-radius:8px;background:var(--accent);color:var(--bg-deep);font-weight:800;display:none;z-index:1000"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

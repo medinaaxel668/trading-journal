@@ -43,7 +43,10 @@ function checkSession() {
       if (user && user.isLoggedIn) showModeScreen();
       else showLoginScreen();
     });
-  } catch(e) { showModeScreen(); }
+  } catch(e) {
+    console.warn('[checkSession] Error al obtener currentUser:', e.message);
+    showLoginScreen();
+  }
 }
 
 // ── SCREENS ───────────────────────────────────────────────────────────────────
@@ -68,6 +71,18 @@ async function showModeScreen() {
 function waitForSync() {
   return new Promise(resolve => {
     if (!db || !db.cloud) return resolve(); // modo local, no esperar
+    
+    // Si no hay usuario logueado, no esperar sincronización
+    try {
+      const user = db.cloud.currentUser.value;
+      if (!user || !user.isLoggedIn) {
+        console.log('[waitForSync] Sin sesión — omitiendo espera de sync');
+        return resolve();
+      }
+    } catch(e) {
+      return resolve();
+    }
+    
     const timeout = setTimeout(() => {
       console.log('[waitForSync] Timeout — mostrando datos aunque no haya terminado');
       resolve();
