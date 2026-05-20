@@ -58,9 +58,35 @@ async function showModeScreen() {
   document.getElementById('mode-screen').style.display  = 'block';
   document.getElementById('app-screen').style.display   = 'none';
   state.bound = false; // reset al volver al mode screen
+  await waitForSync();
   await loadAllData();
   renderModeStats();
   bindModeLogout();
+}
+
+// ── SYNC WAIT ──────────────────────────────────────────────────────────────────
+function waitForSync() {
+  return new Promise(resolve => {
+    if (!db || !db.cloud) return resolve(); // modo local, no esperar
+    const timeout = setTimeout(() => {
+      console.log('[waitForSync] Timeout — mostrando datos aunque no haya terminado');
+      resolve();
+    }, 12000); // máximo 12 segundos de espera
+    
+    try {
+      db.cloud.syncState.subscribe(s => {
+        const phase = s && s.phase;
+        if (phase === 'in-sync' || phase === 'connected') {
+          clearTimeout(timeout);
+          // Pequeña pausa para que Dexie termine de escribir en IndexedDB
+          setTimeout(resolve, 300);
+        }
+      });
+    } catch(e) {
+      clearTimeout(timeout);
+      resolve();
+    }
+  });
 }
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
@@ -120,6 +146,7 @@ window.enterMode = async function(mode) {
     state.bound = true;
   }
   
+  await waitForSync();
   await loadData();
   renderAll();
 };
@@ -251,10 +278,19 @@ function renderModeStats() {
   if (db && db.cloud && !state.cloudSubscribed) {
     state.cloudSubscribed = true;
     try {
+      let syncedOnce = false;
       db.cloud.syncState.subscribe(s => {
         const badge = document.getElementById('mode-sync-badge'); if(!badge)return;
         const ui = syncPhaseMap(s&&s.phase);
         badge.textContent=ui.text; badge.className='sync-badge '+ui.cls; badge.title=ui.text;
+        // Si la sincronización acaba de completar, recargar datos automáticamente
+        if (!syncedOnce && (s && (s.phase === 'in-sync' || s.phase === 'connected'))) {
+          syncedOnce = true;
+          setTimeout(async () => {
+            await loadAllData();
+            renderModeStats();
+          }, 500);
+        }
       });
       db.cloud.currentUser.subscribe(user => {
         const el = document.getElementById('mode-user-email');
