@@ -1,7 +1,7 @@
 import Dexie from 'https://esm.sh/dexie';
 import dexieCloud from 'https://esm.sh/dexie-cloud-addon';
 const DB_NAME  = 'tradingAppDB';
-const CLOUD_URL = 'https://zs0gyiyrz.dexie.cloud';
+const CLOUD_URL = 'https://zo8mhffzq.dexie.cloud';
 
 
 export let db;
