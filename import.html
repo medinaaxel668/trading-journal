@@ -2,31 +2,27 @@
 <html>
 <head><meta charset="utf-8"><title>Importar Datos</title></head>
 <body style="background:#111;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;flex-direction:column;gap:20px;padding:20px">
-  <div style="text-align:center;max-width:500px;padding:40px;background:#1a1a2e;border-radius:12px;border:1px solid #333">
+  <div style="text-align:center;max-width:600px;padding:40px;background:#1a1a2e;border-radius:12px;border:1px solid #333">
     <h1>📤 Importar Datos</h1>
     <p style="color:#888;font-size:.9rem;margin-bottom:20px">
-      Seleccioná el archivo <code>trading_journal_backup.json</code> que descargaste.
-      Los datos se importarán a la base de datos actual.
+      Seleccioná el archivo <code>trading_journal_backup.json</code> que descargaste
     </p>
     <input type="file" id="file-input" accept=".json" style="margin-bottom:16px;color:#eee">
     <br>
     <button id="btn-import" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.1rem;cursor:pointer;display:none">
-      📤 Importar a la DB nueva
+      📤 Importar
     </button>
-    <div id="status" style="margin-top:20px;font-size:.9rem;color:#aaa;text-align:left"></div>
+    <div id="status" style="margin-top:20px;font-size:.9rem;color:#aaa;text-align:left;max-height:400px;overflow-y:auto"></div>
   </div>
-
-  <div style="color:#666;font-size:.8rem;text-align:center">
-    ⚠️ Abrí esta página desde <strong>http://localhost:8000/import.html</strong><br>
-    o desde GitHub Pages.<br>
-    <strong>IMPORTANTE:</strong> Asegurate de estar logueado en la app con la DB nueva.
-  </div>
-
   <script>
     const fileInput = document.getElementById('file-input');
     const btnImport = document.getElementById('btn-import');
     const status = document.getElementById('status');
-    let importedData = null;
+
+    function log(msg, color='#aaa') {
+      status.innerHTML += `<div style="color:${color};margin:2px 0">${msg}</div>`;
+      status.scrollTop = status.scrollHeight;
+    }
 
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
@@ -34,61 +30,88 @@
       const reader = new FileReader();
       reader.onload = (ev) => {
         try {
-          importedData = JSON.parse(ev.target.result);
-          const stores = Object.keys(importedData);
-          const total = stores.reduce((s, k) => s + (importedData[k]?.length || 0), 0);
-          status.innerHTML = `📄 Archivo cargado: ${stores.length} colecciones, ${total} registros`;
+          const data = JSON.parse(ev.target.result);
+          const stores = Object.keys(data);
+          const total = stores.reduce((s, k) => s + (data[k]?.length || 0), 0);
+          log(`📄 Archivo: ${stores.length} colecciones, ${total} registros totales`);
+          log(`📋 Colecciones: ${stores.join(', ')}`);
+          btnImport.dataset.data = ev.target.result;
           btnImport.style.display = 'inline-block';
         } catch(e) {
-          status.innerHTML = `❌ Error al leer el archivo: ${e.message}`;
+          log(`❌ Error: ${e.message}`, '#f44336');
         }
       };
       reader.readAsText(file);
     });
 
     btnImport.onclick = async () => {
-      if (!importedData) return;
+      const data = JSON.parse(btnImport.dataset.data);
       btnImport.disabled = true;
       btnImport.textContent = '⏳ Importando...';
-      
-      try {
-        // Abrir Dexie y hacer el import
-        const open = indexedDB.open('tradingAppDB-zo8mhffzq');
-        const db = await new Promise((res, rej) => {
-          open.onsuccess = e => res(e.target.result);
-          open.onerror = e => rej(e.target.error);
-        });
 
-        let totalOk = 0, totalErr = 0;
-        for (const [storeName, items] of Object.entries(importedData)) {
+      try {
+        // Cargar Dexie dinámicamente
+        const Dexie = (await import('https://esm.sh/dexie@4.4.2')).default;
+        
+        // Crear DB temporal con el schema correcto
+        const db = new Dexie('tradingAppDB-zo8mhffzq');
+        db.version(3).stores({
+          trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName]',
+          notes:      'id,date,createdAt',
+          liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt',
+          liveNotes:  'id,date,createdAt'
+        });
+        await db.open();
+
+        // Mapear nombres de stores del backup a los de la app
+        const storeMap = {
+          'trades': 'trades',
+          'notes': 'notes',
+          'liveTrades': 'liveTrades',
+          'liveNotes': 'liveNotes',
+          '$trades': 'trades',
+          '$notes': 'notes',
+          '$liveTrades': 'liveTrades',
+          '$liveNotes': 'liveNotes'
+        };
+
+        let totalOk = 0;
+        let totalErr = 0;
+
+        for (const [exportStore, items] of Object.entries(data)) {
           if (!items || items.length === 0) continue;
           
-          // Verificar si el store existe
-          if (!db.objectStoreNames.contains('$' + storeName)) {
-            status.innerHTML += `<div>⚠️ Store "${storeName}" no existe, saltando...</div>`;
+          const targetStore = storeMap[exportStore];
+          if (!targetStore) {
+            log(`⏭️ Saltando "${exportStore}" (colección interna del sistema)`, '#ff9800');
             continue;
           }
-          
-          const tx = db.transaction('$' + storeName, 'readwrite');
-          const store = tx.objectStore('$' + storeName);
-          
-          for (const item of items) {
-            try {
-              store.put(item);
-              totalOk++;
-            } catch(e) {
-              totalErr++;
-            }
+
+          try {
+            // Usar bulkAdd para insertar todos los items
+            const cleanItems = items.map(item => {
+              // Remover campos internos de Dexie Cloud si existen
+              const { '#': internal, ...rest } = item;
+              return rest;
+            });
+            
+            await db.table(targetStore).bulkAdd(cleanItems);
+            log(`✅ "${exportStore}" → ${targetStore}: ${items.length} registros`, '#4caf50');
+            totalOk += items.length;
+          } catch(e) {
+            log(`⚠️ "${exportStore}": ${e.message}`, '#ff9800');
+            totalErr++;
           }
-          await new Promise(res => tx.oncomplete = res);
         }
 
-        status.innerHTML += `<div style="color:#4caf50;margin-top:10px">✅ Importación completada: ${totalOk} registros (${totalErr} errores)</div>`;
-        status.innerHTML += `<div style="color:#888;font-size:.85rem">Recargá la app para ver los datos</div>`;
-        btnImport.textContent = '✅ Hecho';
+        db.close();
+        log(`━━━━━━━━━━━━━━━━━━━━━`, '#888');
+        log(`🎉 Importación completada: ${totalOk} registros importados`, '#4caf50');
+        log(`🔄 Recargá la app para ver los datos`, '#888');
+        btnImport.textContent = '✅ Importado';
       } catch(e) {
-        status.innerHTML += `<div style="color:#f44336">❌ Error: ${e.message}</div>`;
-        btnImport.textContent = '📤 Importar a la DB nueva';
+        log(`❌ Error general: ${e.message}`, '#f44336');
+        btnImport.textContent = '📤 Importar';
         btnImport.disabled = false;
       }
     };
