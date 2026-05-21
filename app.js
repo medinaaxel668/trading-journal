@@ -321,6 +321,78 @@ function bindModeLogout() {
     if (db && db.cloud) db.cloud.logout({deleteLocalData:false}).catch(()=>{});
     else showLoginScreen();
   };
+  
+  // Botón para exportar datos de la DB vieja
+  const btnExport = document.getElementById('btn-export-old');
+  if (btnExport) btnExport.onclick = async () => {
+    btnExport.textContent = '⏳ Exportando...';
+    btnExport.disabled = true;
+    try {
+      const oldDBName = 'tradingAppDB-zs0gyiyrz';
+      const open = indexedDB.open(oldDBName);
+      open.onsuccess = function(e) {
+        const db = e.target.result;
+        // Listar stores disponibles
+        const storeNames = Array.from(db.objectStoreNames);
+        console.log('[Export] Stores disponibles:', storeNames);
+        let allData = {};
+        let pendientes = storeNames.length;
+        if (pendientes === 0) {
+          showToast('No hay stores en la DB vieja', 'error');
+          btnExport.textContent = '📥 Exportar DB vieja';
+          btnExport.disabled = false;
+          return;
+        }
+        storeNames.forEach(store => {
+          try {
+            const tx = db.transaction(store, 'readonly');
+            const req = tx.objectStore(store).getAll();
+            req.onsuccess = function(r) {
+              allData[store] = r.target.result || [];
+              pendientes--;
+              if (pendientes === 0) {
+                const json = JSON.stringify(allData, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'trading_journal_backup.json';
+                a.click();
+                showToast('✅ Backup descargado', 'success');
+                btnExport.textContent = '📥 Exportar DB vieja';
+                btnExport.disabled = false;
+              }
+            };
+            req.onerror = function() {
+              allData[store] = [];
+              pendientes--;
+              if (pendientes === 0) {
+                showToast('Backup descargado (parcial)', 'success');
+                btnExport.textContent = '📥 Exportar DB vieja';
+                btnExport.disabled = false;
+              }
+            };
+          } catch(e) {
+            allData[store] = [];
+            pendientes--;
+            if (pendientes === 0) {
+              showToast('Backup descargado (parcial)', 'success');
+              btnExport.textContent = '📥 Exportar DB vieja';
+              btnExport.disabled = false;
+            }
+          }
+        });
+      };
+      open.onerror = function() {
+        showToast('No se pudo abrir la DB vieja', 'error');
+        btnExport.textContent = '📥 Exportar DB vieja';
+        btnExport.disabled = false;
+      };
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+      btnExport.textContent = '📥 Exportar DB vieja';
+      btnExport.disabled = false;
+    }
+  };
 }
 
 async function migrateTradesToTags() {
@@ -1237,14 +1309,19 @@ function renderNotes(){
   if(state.notes.length===0){container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📝</div>No hay notas aún</div>';return;}
   container.innerHTML=state.notes.map(n=>`
     <div class="note-item">
-      <div class="note-item-header">
+      <div class="note-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span class="note-date">${fmtDateTime(n.date)}</span>
-        <button class="btn-sm-red" data-note-id="${n.id}">Borrar</button>
+        <button class="btn-note-delete" data-note-id="${n.id}"
+          style="background:transparent;border:1px solid var(--border,#444);color:var(--text-muted,#888);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:all .2s"
+          onmouseover="this.style.borderColor='var(--red,#f44336)';this.style.color='var(--red,#f44336)'"
+          onmouseout="this.style.borderColor='var(--border,#444)';this.style.color='var(--text-muted,#888)'">🗑️ Borrar</button>
       </div>
       <div class="note-text">${esc(n.text)}</div>
-      ${n.links&&n.links.length>0?`<div class="note-links">${n.links.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener">Link ${i+1}</a>`).join('')}</div>`:''}`
+      ${n.links&&n.links.length>0?`<div class="note-links" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${n.links.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener"
+        style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px solid rgba(100,200,255,.3);color:#64c8ff;padding:4px 12px;border-radius:6px;text-decoration:none;font-size:.75rem;transition:all .2s"
+        onmouseover="this.style.background='rgba(100,200,255,.1)'" onmouseout="this.style.background='transparent'">🔗 Link ${i+1}</a>`).join('')}</div>`:''}
     +`</div>`).join('');
-  container.querySelectorAll('.btn-sm-red').forEach(btn=>{
+  container.querySelectorAll('.btn-note-delete').forEach(btn=>{
     btn.addEventListener('click', async()=>{
       if(state.mode==='live') await deleteLiveNote(btn.dataset.noteId);
       else await deleteNote(btn.dataset.noteId);
