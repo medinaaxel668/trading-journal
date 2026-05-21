@@ -1307,20 +1307,22 @@ function bindNoteForm(){
 function renderNotes(){
   const container=document.getElementById('notes-list');
   if(state.notes.length===0){container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📝</div>No hay notas aún</div>';return;}
-  container.innerHTML=state.notes.map(n=>`
-    <div class="note-item">
-      <div class="note-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span class="note-date">${fmtDateTime(n.date)}</span>
-        <button class="btn-note-delete" data-note-id="${n.id}"
-          style="background:transparent;border:1px solid var(--border,#444);color:var(--text-muted,#888);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:all .2s"
-          onmouseover="this.style.borderColor='var(--red,#f44336)';this.style.color='var(--red,#f44336)'"
-          onmouseout="this.style.borderColor='var(--border,#444)';this.style.color='var(--text-muted,#888)'">🗑️ Borrar</button>
-      </div>
-      <div class="note-text">${esc(n.text)}</div>
-      ${n.links&&n.links.length>0?`<div class="note-links" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${n.links.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener"
-        style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px solid rgba(100,200,255,.3);color:#64c8ff;padding:4px 12px;border-radius:6px;text-decoration:none;font-size:.75rem;transition:all .2s"
-        onmouseover="this.style.background='rgba(100,200,255,.1)'" onmouseout="this.style.background='transparent'">🔗 Link ${i+1}</a>`).join('')}</div>`:''}
-    +`</div>`).join('');
+  let html='';
+  for(const n of state.notes){
+    const date=fmtDateTime(n.date);
+    const text=esc(n.text);
+    let linksHtml='';
+    if(n.links&&n.links.length>0){
+      linksHtml='<div class="note-links" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">';
+      n.links.forEach((l,i)=>{
+        const url=esc(l);
+        linksHtml+='<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px solid rgba(100,200,255,.3);color:#64c8ff;padding:4px 12px;border-radius:6px;text-decoration:none;font-size:.75rem;transition:all .2s" onmouseover="this.style.background=\'rgba(100,200,255,.1)\'" onmouseout="this.style.background=\'transparent\'">🔗 Link '+(i+1)+'</a>';
+      });
+      linksHtml+='</div>';
+    }
+    html+='<div class="note-item"><div class="note-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="note-date">'+date+'</span><button class="btn-note-delete" data-note-id="'+n.id+'" style="background:transparent;border:1px solid var(--border,#444);color:var(--text-muted,#888);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:all .2s" onmouseover="this.style.borderColor=\'var(--red,#f44336)\';this.style.color=\'var(--red,#f44336)\'" onmouseout="this.style.borderColor=\'var(--border,#444)\';this.style.color=\'var(--text-muted,#888)\'">🗑️ Borrar</button></div><div class="note-text">'+text+'</div>'+linksHtml+'</div>';
+  }
+  container.innerHTML=html;
   container.querySelectorAll('.btn-note-delete').forEach(btn=>{
     btn.addEventListener('click', async()=>{
       if(state.mode==='live') await deleteLiveNote(btn.dataset.noteId);
