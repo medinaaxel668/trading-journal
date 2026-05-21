@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Importar Datos</title></head>
+<body style="background:#111;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;flex-direction:column;gap:20px;padding:20px">
+  <div style="text-align:center;max-width:500px;padding:40px;background:#1a1a2e;border-radius:12px;border:1px solid #333">
+    <h1>📤 Importar Datos</h1>
+    <p style="color:#888;font-size:.9rem;margin-bottom:20px">
+      Seleccioná el archivo <code>trading_journal_backup.json</code> que descargaste.
+      Los datos se importarán a la base de datos actual.
+    </p>
+    <input type="file" id="file-input" accept=".json" style="margin-bottom:16px;color:#eee">
+    <br>
+    <button id="btn-import" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.1rem;cursor:pointer;display:none">
+      📤 Importar a la DB nueva
+    </button>
+    <div id="status" style="margin-top:20px;font-size:.9rem;color:#aaa;text-align:left"></div>
+  </div>
+
+  <div style="color:#666;font-size:.8rem;text-align:center">
+    ⚠️ Abrí esta página desde <strong>http://localhost:8000/import.html</strong><br>
+    o desde GitHub Pages.<br>
+    <strong>IMPORTANTE:</strong> Asegurate de estar logueado en la app con la DB nueva.
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('file-input');
+    const btnImport = document.getElementById('btn-import');
+    const status = document.getElementById('status');
+    let importedData = null;
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          importedData = JSON.parse(ev.target.result);
+          const stores = Object.keys(importedData);
+          const total = stores.reduce((s, k) => s + (importedData[k]?.length || 0), 0);
+          status.innerHTML = `📄 Archivo cargado: ${stores.length} colecciones, ${total} registros`;
+          btnImport.style.display = 'inline-block';
+        } catch(e) {
+          status.innerHTML = `❌ Error al leer el archivo: ${e.message}`;
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    btnImport.onclick = async () => {
+      if (!importedData) return;
+      btnImport.disabled = true;
+      btnImport.textContent = '⏳ Importando...';
+      
+      try {
+        // Abrir Dexie y hacer el import
+        const open = indexedDB.open('tradingAppDB-zo8mhffzq');
+        const db = await new Promise((res, rej) => {
+          open.onsuccess = e => res(e.target.result);
+          open.onerror = e => rej(e.target.error);
+        });
+
+        let totalOk = 0, totalErr = 0;
+        for (const [storeName, items] of Object.entries(importedData)) {
+          if (!items || items.length === 0) continue;
+          
+          // Verificar si el store existe
+          if (!db.objectStoreNames.contains('$' + storeName)) {
+            status.innerHTML += `<div>⚠️ Store "${storeName}" no existe, saltando...</div>`;
+            continue;
+          }
+          
+          const tx = db.transaction('$' + storeName, 'readwrite');
+          const store = tx.objectStore('$' + storeName);
+          
+          for (const item of items) {
+            try {
+              store.put(item);
+              totalOk++;
+            } catch(e) {
+              totalErr++;
+            }
+          }
+          await new Promise(res => tx.oncomplete = res);
+        }
+
+        status.innerHTML += `<div style="color:#4caf50;margin-top:10px">✅ Importación completada: ${totalOk} registros (${totalErr} errores)</div>`;
+        status.innerHTML += `<div style="color:#888;font-size:.85rem">Recargá la app para ver los datos</div>`;
+        btnImport.textContent = '✅ Hecho';
+      } catch(e) {
+        status.innerHTML += `<div style="color:#f44336">❌ Error: ${e.message}</div>`;
+        btnImport.textContent = '📤 Importar a la DB nueva';
+        btnImport.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
