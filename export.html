@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Exportar Datos</title></head>
+<body style="background:#111;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+  <div style="text-align:center;max-width:500px;padding:40px">
+    <h1>📥 Exportar Datos</h1>
+    <p id="status" style="color:#888">Preparando...</p>
+    <button id="btn-export" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.1rem;cursor:pointer;display:none">
+      📥 Descargar Backup
+    </button>
+    <div id="result" style="margin-top:20px;text-align:left;font-size:.85rem;color:#aaa"></div>
+  </div>
+  <script>
+    const status = document.getElementById('status');
+    const btn = document.getElementById('btn-export');
+    const result = document.getElementById('result');
+    let allData = {};
+
+    async function exportar() {
+      status.textContent = '🔍 Buscando bases de datos...';
+      const dbs = await indexedDB.databases();
+      const oldDBs = dbs.filter(d => d.name && d.name.includes('zs0gyiyrz'));
+      
+      for (const info of oldDBs) {
+        status.textContent = '📂 Abriendo: ' + info.name;
+        const db = await new Promise((res, rej) => {
+          const r = indexedDB.open(info.name);
+          r.onsuccess = e => res(e.target.result);
+          r.onerror = e => rej(e.target.error);
+        });
+        
+        const stores = Array.from(db.objectStoreNames);
+        for (const store of stores) {
+          const items = await new Promise((res, rej) => {
+            const tx = db.transaction(store, 'readonly');
+            const req = tx.objectStore(store).getAll();
+            req.onsuccess = e => res(e.target.result || []);
+            req.onerror = e => res([]);
+          });
+          if (items.length > 0) {
+            allData[store] = items;
+            result.innerHTML += `<div>✅ ${store}: ${items.length} registros</div>`;
+          }
+        }
+        db.close();
+      }
+
+      const total = Object.values(allData).reduce((s, arr) => s + arr.length, 0);
+      if (total === 0) {
+        status.textContent = '❌ No se encontraron datos en ninguna DB';
+        return;
+      }
+
+      status.textContent = `✅ ${total} registros encontrados`;
+      btn.style.display = 'inline-block';
+    }
+
+    btn.onclick = () => {
+      const json = JSON.stringify(allData, null, 2);
+      const blob = new Blob([json], {type: 'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'trading_journal_backup.json';
+      a.click();
+      status.textContent = '✅ Backup descargado';
+    };
+
+    exportar();
+  </script>
+</body>
+</html>
