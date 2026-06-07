@@ -1,22 +1,22 @@
 /* styles.css — Trading Journal Pro 2.0 (Earthy Palette) */
 :root {
   /* DARK MODE (Default) */
-  --bg-deep:      #1a1a1a;
-  --bg-main:      #2D2D2D;
-  --bg-card:      rgba(45, 45, 45, 0.98);
-  --bg-input:     #252525;
-  --border:       rgba(215, 201, 174, 0.1);
-  --border-focus: #D7C9AE;
-  --text:         #EAE0D2;
-  --text-muted:   #A68763;
-  --accent:       #D7C9AE;
-  --accent-dim:   #A68763;
-  --green:        #8fb339;
-  --red:          #d62828;
-  --gold:         #D7C9AE;
+  --bg-deep:      #111714;
+  --bg-main:      #181F1B;
+  --bg-card:      rgba(32, 41, 36, 0.98);
+  --bg-input:     #202A25;
+  --border:       rgba(248, 245, 242, 0.08);
+  --border-focus: #A9C2B1;
+  --text:         #F4EFE7;
+  --text-muted:   #B6C0B8;
+  --accent:       #A9C2B1;
+  --accent-dim:   #8FAF9D;
+  --green:        #8DBA6A;
+  --red:          #D26B6B;
+  --gold:         #D7C46A;
   --radius:       12px;
   --radius-lg:    20px;
-  --shadow:       0 8px 32px rgba(0,0,0,0.5);
+  --shadow:       0 10px 28px rgba(0,0,0,0.35);
 }
 
 body.light-mode {
@@ -30,6 +30,7 @@ body.light-mode {
   --text-muted:   #6E8278;
   --accent:       #385144;
   --accent-dim:   #5E7468;
+  --green:        #56725F;
   --gold:         #385144;
   --shadow:       0 8px 28px rgba(56, 81, 68, 0.10);
 }
@@ -364,9 +365,19 @@ header {
 .badge-tp { background: rgba(76,175,80,0.12); color: var(--green); border: 1px solid rgba(76,175,80,0.3); }
 .badge-sl { background: rgba(214,40,40,0.12); color: var(--red); border: 1px solid rgba(214,40,40,0.3); }
 .badge-be { background: rgba(255,193,7,0.12); color: #ffc107; border: 1px solid rgba(255,193,7,0.3); }
-.badge-mode-live { background: rgba(76,175,80,0.12); color: var(--green); border: 1px solid rgba(76,175,80,0.3); }
-.badge-mode-bt { background: rgba(100,200,255,0.12); color: #64c8ff; border: 1px solid rgba(100,200,255,0.3); }
+.badge-mode-live { background: rgba(141,186,106,0.12); color: var(--green); border: 1px solid rgba(141,186,106,0.28); }
+.badge-mode-bt { background: rgba(169,194,177,0.12); color: var(--accent); border: 1px solid rgba(169,194,177,0.28); }
 .mode-indicator { font-size: 0.7rem; font-weight: 800; padding: 4px 12px; border-radius: 6px; }
+.mode-indicator {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.badge-mode-live,
+.badge-mode-bt {
+  padding-inline: 10px;
+}
 
 /* ── DETAIL MODAL ────────────────────────────────────────────────────────── */
 .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
