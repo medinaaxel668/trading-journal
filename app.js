@@ -18,7 +18,7 @@ const state = {
   currentTab: 'dashboard',
   analyticsTags: [],
   customTags: JSON.parse(localStorage.getItem('journal_custom_tags') || '[]'),
-  historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'' },
+  historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent' },
   bound: false // flag para evitar listeners duplicados
 };
 
@@ -814,11 +814,12 @@ function populateTagFilter() {
 }
 
 function bindHistoryFilters() {
-  const ids=['filter-tag','filter-smt','filter-result','filter-date-from','filter-date-to'];
+  const ids=['filter-tag','filter-smt','filter-result','filter-sort','filter-date-from','filter-date-to'];
   const update=()=>{
     state.historyFilters.tag     =document.getElementById('filter-tag')?.value||'';
     state.historyFilters.smt     =document.getElementById('filter-smt')?.value||'';
     state.historyFilters.result  =document.getElementById('filter-result')?.value||'';
+    state.historyFilters.sort    =document.getElementById('filter-sort')?.value||'recent';
     state.historyFilters.dateFrom=document.getElementById('filter-date-from')?.value||'';
     state.historyFilters.dateTo  =document.getElementById('filter-date-to')?.value||'';
     renderHistory();
@@ -838,6 +839,11 @@ function renderHistory() {
   if(f.result)   trades=trades.filter(t=>t.result===f.result);
   if(f.dateFrom) trades=trades.filter(t=>t.date>=f.dateFrom);
   if(f.dateTo)   trades=trades.filter(t=>t.date<=f.dateTo);
+  const getLoadedAt = t => new Date(t.createdAt || `${t.date}T00:00:00`).getTime();
+  trades.sort((a,b)=>{
+    const diff = getLoadedAt(a) - getLoadedAt(b);
+    return f.sort === 'oldest' ? diff : -diff;
+  });
   const container=document.getElementById('trade-list');
   if(trades.length===0){
     container.innerHTML=state.trades.length>0
@@ -845,8 +851,7 @@ function renderHistory() {
       :'<div class="empty-state"><div class="empty-state-icon">📋</div>No hay trades registrados</div>';
     return;
   }
-  const sorted=[...trades].sort((a,b)=>new Date(b.date)-new Date(a.date)||new Date(b.createdAt)-new Date(a.createdAt));
-  container.innerHTML=sorted.map(t=>buildTradeCard(t)).join('');
+  container.innerHTML=trades.map(t=>buildTradeCard(t)).join('');
   container.querySelectorAll('.btn-edit').forEach(btn=>btn.addEventListener('click',()=>openEditModal(btn.dataset.id)));
   container.querySelectorAll('.btn-delete').forEach(btn=>btn.addEventListener('click',()=>confirmDelete(btn.dataset.id)));
   container.querySelectorAll('.btn-detail').forEach(btn=>btn.addEventListener('click',()=>openDetailModal(btn.dataset.id)));
