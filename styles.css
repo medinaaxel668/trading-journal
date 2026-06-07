@@ -81,7 +81,7 @@ header {
   align-items: center;
   margin-bottom: 40px;
 }
-.mode-user-info { display: flex; align-items: center; gap: 12px; }
+.mode-user-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .mode-stats-grid {
   display: grid;
@@ -222,6 +222,61 @@ header {
 
 /* ── MISC ────────────────────────────────────────────────────────────────── */
 .sync-badge { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; background: rgba(0,0,0,0.2); }
+.icon-toggle,
+.btn-ghost-action {
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.icon-toggle {
+  width: 34px;
+  padding: 0;
+  flex: 0 0 auto;
+  box-shadow: none;
+}
+.icon-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-toggle[data-theme="light"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.btn-ghost-action {
+  padding: 0 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.icon-toggle:hover,
+.btn-ghost-action:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  transform: translateY(-1px);
+}
+.icon-toggle:focus-visible,
+.btn-ghost-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+.btn-ghost-action:active,
+.icon-toggle:active { transform: translateY(0); }
 .btn-sm-logout { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 5px 12px; border-radius: 8px; cursor: pointer; }
 .positive { color: var(--green); }
 .negative { color: var(--red); }

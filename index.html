@@ -39,9 +39,10 @@
     <div class="mode-header">
       <div class="app-logo">Trading Journal <span style="color:var(--text-muted)">Pro</span></div>
       <div class="mode-user-info">
+        <button type="button" id="theme-toggle-mode" class="icon-toggle" data-theme-toggle aria-label="Cambiar tema"></button>
         <span class="sync-badge" id="mode-sync-status">Offline</span>
-        <button class="btn-sm-logout" id="btn-export-old">📥 Exportar DB vieja</button>
-        <button class="btn-sm-logout" id="btn-mode-logout">Logout</button>
+        <button class="btn-ghost-action" id="btn-export-old">Exportar DB vieja</button>
+        <button class="btn-ghost-action" id="btn-mode-logout">Logout</button>
       </div>
     </div>
 
@@ -99,11 +100,11 @@
         <button class="tab-btn" data-tab="notes">Notas</button>
       </nav>
       <div class="mode-user-info">
-        <button id="theme-toggle" class="btn-theme" style="background:none;border:none;font-size:1.2rem;cursor:pointer">🌓</button>
+        <button type="button" id="theme-toggle" class="icon-toggle" data-theme-toggle aria-label="Cambiar tema"></button>
         <span id="sync-status" class="sync-badge">Offline</span>
-        <button id="btn-cloud-login" class="btn-sm-logout">Login</button>
+        <button id="btn-cloud-login" class="btn-ghost-action">Login</button>
         <div id="cloud-user-wrap" style="display:none">
-          <button id="btn-cloud-logout" class="btn-sm-logout">Logout</button>
+          <button id="btn-cloud-logout" class="btn-ghost-action">Logout</button>
         </div>
       </div>
     </div>

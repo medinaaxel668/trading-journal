@@ -108,19 +108,34 @@ function waitForSync() {
 function initTheme() {
   const saved = localStorage.getItem('journal_theme') || 'dark';
   if (saved === 'light') document.body.classList.add('light-mode');
-  
-  const btn = document.getElementById('theme-toggle');
-  if (btn) {
+  document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
     btn.addEventListener('click', toggleTheme);
-  }
+  });
+  updateThemeToggleButtons();
 }
 
 function toggleTheme() {
   document.body.classList.toggle('light-mode');
   const isLight = document.body.classList.contains('light-mode');
   localStorage.setItem('journal_theme', isLight ? 'light' : 'dark');
+  updateThemeToggleButtons();
   updateChartDefaults();
   renderAll();
+}
+
+function updateThemeToggleButtons() {
+  const isLight = document.body.classList.contains('light-mode');
+  const title = isLight ? 'Cambiar a oscuro' : 'Cambiar a claro';
+  const icon = isLight
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M4.7 4.7l1.8 1.8M17.5 17.5l1.8 1.8M2.5 12H5M19 12h2.5M4.7 19.3l1.8-1.8M17.5 6.5l1.8-1.8"/></svg>`;
+
+  document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
+    btn.innerHTML = icon;
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    btn.dataset.theme = isLight ? 'light' : 'dark';
+  });
 }
 
 function updateChartDefaults() {
@@ -141,6 +156,7 @@ function showAppScreen() {
   document.getElementById('app-screen').style.display   = 'block';
 }
 
+window.showModeScreen = async function() { await showModeScreen(); };
 window.goToModeScreen = async function() { await showModeScreen(); };
 
 window.enterMode = async function(mode) {
