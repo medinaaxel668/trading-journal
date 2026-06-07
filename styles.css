@@ -20,17 +20,18 @@
 }
 
 body.light-mode {
-  --bg-deep:      #EAE0D2;
-  --bg-main:      #fdfcfb;
-  --bg-card:      #ffffff;
-  --bg-input:     #ffffff;
-  --border:       rgba(166, 135, 99, 0.2);
-  --border-focus: #A68763;
-  --text:         #2D2D2D;
-  --text-muted:   #666;
-  --accent:       #A68763;
-  --accent-dim:   #D7C9AE;
-  --shadow:       0 8px 32px rgba(166, 135, 99, 0.15);
+  --bg-deep:      #F8F5F2;
+  --bg-main:      #F4F0EA;
+  --bg-card:      #FBF8F4;
+  --bg-input:     #FFFFFF;
+  --border:       rgba(56, 81, 68, 0.14);
+  --border-focus: #385144;
+  --text:         #385144;
+  --text-muted:   #6E8278;
+  --accent:       #385144;
+  --accent-dim:   #5E7468;
+  --gold:         #385144;
+  --shadow:       0 8px 28px rgba(56, 81, 68, 0.10);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
