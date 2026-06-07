@@ -17,6 +17,8 @@ const state = {
   editingTradeId: null,
   currentTab: 'dashboard',
   analyticsTags: [],
+  analyticsCalendarMonths: [],
+  analyticsCalendarMonth: '',
   customTags: JSON.parse(localStorage.getItem('journal_custom_tags') || '[]'),
   historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent' },
   bound: false // flag para evitar listeners duplicados
@@ -121,6 +123,9 @@ function toggleTheme() {
   updateThemeToggleButtons();
   updateChartDefaults();
   renderAll();
+  if (document.getElementById('mode-screen')?.style.display !== 'none') {
+    renderModeStats();
+  }
 }
 
 function updateThemeToggleButtons() {
@@ -306,6 +311,7 @@ function renderModeStats() {
   setEl('mc-live-count',live.length);
   setEl('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
   setEl('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
+  renderModePreviews(bt, live);
   if (db && db.cloud && !state.cloudSubscribed) {
     state.cloudSubscribed = true;
     try {
@@ -329,6 +335,51 @@ function renderModeStats() {
       });
     } catch(e){}
   }
+}
+
+function renderModePreviews(btTrades, liveTrades) {
+  const line = document.body.classList.contains('light-mode') ? '#56725F' : '#8DBA6A';
+  renderMiniEquityChart('preview-bt', equitySeries(btTrades || []), line);
+  renderMiniEquityChart('preview-live', equitySeries(liveTrades || []), line);
+}
+
+function renderMiniEquityChart(canvasId, series, lineColor) {
+  if (!window.Chart) {
+    setTimeout(() => renderMiniEquityChart(canvasId, series, lineColor), 300);
+    return;
+  }
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  const key = `mini-${canvasId}`;
+  destroyChart(key);
+  const points = series.length > 0 ? [0, ...series.map(s => s.equity)] : [0, 0];
+  const labels = series.length > 0 ? ['0', ...series.map(s => s.date)] : ['0', '1'];
+  state.charts[key] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: points,
+        borderColor: lineColor,
+        backgroundColor: 'rgba(141,186,106,.12)',
+        borderWidth: 2,
+        fill: true,
+        tension: .35,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: { display: false }
+      },
+      elements: { line: { capBezierPoints: true } }
+    }
+  });
 }
 
 function bindModeLogout() {
@@ -1137,7 +1188,64 @@ function renderAnalytics() {
   renderKillZoneChart(trades);
   renderMonthChart(trades);
   renderEquityChart(equitySeries(trades),'chart-equity-analytics');
+  renderPerfCalendarNav(trades);
   renderPerfCalendar(trades);
+}
+
+function renderPerfCalendarNav(trades) {
+  const months = getAvailableCalendarMonths(trades);
+  state.analyticsCalendarMonths = months;
+  if (!months.length) {
+    state.analyticsCalendarMonth = '';
+    const label = document.getElementById('perf-calendar-month');
+    const prev = document.getElementById('perf-calendar-prev');
+    const next = document.getElementById('perf-calendar-next');
+    if (label) label.textContent = '';
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  if (!months.includes(state.analyticsCalendarMonth)) {
+    state.analyticsCalendarMonth = months[months.length - 1];
+  }
+
+  const idx = months.indexOf(state.analyticsCalendarMonth);
+  const label = document.getElementById('perf-calendar-month');
+  const prev = document.getElementById('perf-calendar-prev');
+  const next = document.getElementById('perf-calendar-next');
+  if (label) label.textContent = formatMonthLabel(state.analyticsCalendarMonth);
+  if (prev) {
+    prev.disabled = idx <= 0;
+    prev.innerHTML = '&lsaquo;';
+    prev.onclick = () => {
+      const nextIndex = Math.max(0, idx - 1);
+      state.analyticsCalendarMonth = months[nextIndex];
+      renderPerfCalendarNav(trades);
+      renderPerfCalendar(trades);
+    };
+  }
+  if (next) {
+    next.disabled = idx >= months.length - 1;
+    next.innerHTML = '&rsaquo;';
+    next.onclick = () => {
+      const nextIndex = Math.min(months.length - 1, idx + 1);
+      state.analyticsCalendarMonth = months[nextIndex];
+      renderPerfCalendarNav(trades);
+      renderPerfCalendar(trades);
+    };
+  }
+}
+
+function getAvailableCalendarMonths(trades) {
+  return [...new Set(trades.map(t => t.date.slice(0, 7)))].sort();
+}
+
+function formatMonthLabel(monthKey) {
+  if (!monthKey) return '';
+  const [year, month] = monthKey.split('-').map(Number);
+  const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return `${monthNames[month - 1]} ${year}`;
 }
 
 function initDraggableGrid(grid, storageKey) {
@@ -1218,30 +1326,26 @@ function renderPerfCalendar(trades){
   const wrap=document.getElementById('perf-calendar-wrap'); if(!wrap)return;
   const byDay={};trades.forEach(t=>{byDay[t.date]=(byDay[t.date]||0)+t.pnl;});
   if(Object.keys(byDay).length===0){wrap.innerHTML='<div class="empty-state" style="padding:24px">Sin datos</div>';return;}
-  const dates=Object.keys(byDay).sort();
-  const months=[...new Set(dates.map(d=>d.slice(0,7)))].sort().reverse().slice(0,3);
-  const monthNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  wrap.innerHTML=months.map(month=>{
-    const[y,m]=month.split('-').map(Number);
-    const firstDay=new Date(y,m-1,1).getDay();
-    const daysInMonth=new Date(y,m,0).getDate();
-    const offset=firstDay===0?6:firstDay-1;
-    let cells='';
-    for(let i=0;i<offset;i++)cells+=`<div class="cal-day empty"></div>`;
-    for(let d=1;d<=daysInMonth;d++){
-      const key=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const pnl=byDay[key];
-      if(pnl===undefined)cells+=`<div class="cal-day no-data"><span class="cal-num">${d}</span></div>`;
-      else cells+=`<div class="cal-day ${pnl>=0?'pos':'neg'}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnl>=0?'+':''}${pnl.toFixed(0)}$</span></div>`;
-    }
-    return `<div style="margin-bottom:16px">
-      <div style="font-size:.82rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">${monthNames[m-1]} ${y}</div>
+  const month=state.analyticsCalendarMonth || getAvailableCalendarMonths(trades).slice(-1)[0];
+  if(!month){wrap.innerHTML='<div class="empty-state" style="padding:24px">Sin datos</div>';return;}
+  const [y,m]=month.split('-').map(Number);
+  const firstDay=new Date(y,m-1,1).getDay();
+  const daysInMonth=new Date(y,m,0).getDate();
+  const offset=firstDay===0?6:firstDay-1;
+  let cells='';
+  for(let i=0;i<offset;i++)cells+=`<div class="cal-day empty"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const key=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const pnl=byDay[key];
+    if(pnl===undefined)cells+=`<div class="cal-day no-data"><span class="cal-num">${d}</span></div>`;
+    else cells+=`<div class="cal-day ${pnl>=0?'pos':'neg'}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnl>=0?'+':''}${pnl.toFixed(0)}$</span></div>`;
+  }
+  wrap.innerHTML=`<div class="calendar-month">
       <div class="perf-calendar">
-        <div class="cal-header">Lun</div><div class="cal-header">Mar</div><div class="cal-header">Mié</div>
-        <div class="cal-header">Jue</div><div class="cal-header">Vie</div><div class="cal-header">Sáb</div><div class="cal-header">Dom</div>
+        <div class="cal-header">Lun</div><div class="cal-header">Mar</div><div class="cal-header">Mi?</div>
+        <div class="cal-header">Jue</div><div class="cal-header">Vie</div><div class="cal-header">S?b</div><div class="cal-header">Dom</div>
         ${cells}
       </div></div>`;
-  }).join('');
 }
 
 function renderDonutChart(wins,losses,bes){

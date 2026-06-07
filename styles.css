@@ -123,13 +123,23 @@ header {
 }
 .mode-card-item:hover { transform: translateY(-8px); border-color: var(--accent); }
 
-.mode-icon {
-  font-size: 2.5rem;
-  width: 72px; height: 72px;
+.mode-preview {
+  width: 80px;
+  height: 80px;
   margin: 0 auto 20px;
-  display: flex; align-items: center; justify-content: center;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 20px;
-  background: rgba(215, 201, 174, 0.05);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.mode-preview canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 .mode-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 12px; }
 .mode-desc { font-size: 0.95rem; color: var(--text-muted); margin-bottom: 24px; }
@@ -156,6 +166,15 @@ header {
   grid-template-columns: repeat(6, 1fr);
   gap: 16px;
   margin-bottom: 40px;
+}
+.analytics-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+.analytics-split > .mode-stat-card {
+  min-width: 0;
 }
 
 .radio-group {
@@ -487,6 +506,39 @@ body.light-mode .daywr-bar-wrap { background: rgba(0,0,0,0.05); }
 .cal-day.neg { background: rgba(244,67,54,0.15); border-color: rgba(244,67,54,0.3); color: var(--red); }
 .cal-num { position: absolute; top: 2px; left: 4px; font-size: 0.6rem; opacity: 0.7; font-weight: 600; }
 .cal-pnl { font-weight: 800; }
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.calendar-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.calendar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+.calendar-month-label {
+  min-width: 88px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--accent);
+}
+.calendar-month {
+  max-width: 620px;
+}
 
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -495,4 +547,5 @@ body.light-mode .daywr-bar-wrap { background: rgba(0,0,0,0.05); }
   .mode-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .trade-item-header { flex-direction: column; align-items: flex-start; }
   .trade-pnl { margin-left: 0; }
+  .analytics-split { grid-template-columns: 1fr; }
 }

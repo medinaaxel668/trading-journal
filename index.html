@@ -70,14 +70,14 @@
 
       <div class="modes-grid">
         <div class="mode-card-item" onclick="enterMode('backtest')">
-          <div class="mode-icon">📈</div>
+          <div class="mode-preview"><canvas id="preview-bt"></canvas></div>
           <h3 class="mode-title">Backtesting</h3>
           <p class="mode-desc">Analizá trades históricos y perfeccioná tu estrategia.</p>
           <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-bt-count">0</span> | P&L: <span id="mc-bt-pnl">0</span> | WR: <span id="mc-bt-wr">0</span></div>
           <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Backtesting →</button>
         </div>
         <div class="mode-card-item" onclick="enterMode('live')">
-          <div class="mode-icon">📈</div>
+          <div class="mode-preview"><canvas id="preview-live"></canvas></div>
           <h3 class="mode-title">Trading en Vivo</h3>
           <p class="mode-desc">Registrá tus sesiones reales y analizá tu psicología.</p>
           <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-live-count">0</span> | P&L: <span id="mc-live-pnl">0</span> | WR: <span id="mc-live-wr">0</span></div>
@@ -279,21 +279,28 @@
       </div>
 
       <!-- Equity Analytics -->
-      <div class="mode-stat-card" style="margin-top:24px">
-        <div class="card-label">Curva de Equity (Filtrada)</div>
-        <div style="height:350px"><canvas id="chart-equity-analytics"></canvas></div>
-      </div>
-
-      <!-- Month Chart -->
-      <div class="mode-stat-card" style="margin-top:24px">
-        <div class="card-label">P&L Mensual</div>
-        <select id="month-chart-year" class="form-select" style="max-width:120px;margin-bottom:16px"></select>
-        <div style="height:300px"><canvas id="chart-month"></canvas></div>
+      <div class="analytics-split" style="margin-top:24px">
+        <div class="mode-stat-card">
+          <div class="card-label">P&L Mensual</div>
+          <select id="month-chart-year" class="form-select" style="max-width:120px;margin-bottom:16px"></select>
+          <div style="height:300px"><canvas id="chart-month"></canvas></div>
+        </div>
+        <div class="mode-stat-card">
+          <div class="card-label">Curva de Equity (Filtrada)</div>
+          <div style="height:350px"><canvas id="chart-equity-analytics"></canvas></div>
+        </div>
       </div>
 
       <!-- Perf Calendar -->
       <div class="mode-stat-card" style="margin-top:24px">
-        <div class="card-label">Calendario de Rendimiento</div>
+        <div class="calendar-head">
+          <div class="card-label">Calendario de Rendimiento</div>
+          <div class="calendar-nav">
+            <button id="perf-calendar-prev" class="icon-toggle calendar-btn" type="button" aria-label="Mes anterior"></button>
+            <span id="perf-calendar-month" class="calendar-month-label"></span>
+            <button id="perf-calendar-next" class="icon-toggle calendar-btn" type="button" aria-label="Mes siguiente"></button>
+          </div>
+        </div>
         <div id="perf-calendar-wrap"></div>
       </div>
     </section>
