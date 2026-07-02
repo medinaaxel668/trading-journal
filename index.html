@@ -68,6 +68,32 @@
       </div>
     </div>
 
+    <div class="mode-stat-card" style="margin-top:24px;padding:28px;text-align:left">
+      <div class="card-label" style="margin-bottom:16px;">Diagnóstico de datos</div>
+      <div class="mode-stats-grid" style="margin-top:0">
+        <div class="mode-stat-card">
+          <div class="mode-stat-label">Notas backtest</div>
+          <div id="ms-bt-notes-count" class="mode-stat-value">---</div>
+          <div class="mode-stat-sub">registros</div>
+        </div>
+        <div class="mode-stat-card">
+          <div class="mode-stat-label">Notas live</div>
+          <div id="ms-live-notes-count" class="mode-stat-value">---</div>
+          <div class="mode-stat-sub">registros</div>
+        </div>
+        <div class="mode-stat-card">
+          <div class="mode-stat-label">Notas totales</div>
+          <div id="ms-total-notes-count" class="mode-stat-value">---</div>
+          <div class="mode-stat-sub">bt + live</div>
+        </div>
+        <div class="mode-stat-card">
+          <div class="mode-stat-label">Fuente</div>
+          <div id="ms-data-source" class="mode-stat-value" style="font-size:1rem;line-height:1.2">---</div>
+          <div class="mode-stat-sub">estado de carga</div>
+        </div>
+      </div>
+    </div>
+
       <div class="modes-grid">
         <div class="mode-card-item" onclick="enterMode('backtest')">
           <div class="mode-preview"><canvas id="preview-bt"></canvas></div>

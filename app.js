@@ -13,6 +13,8 @@ const state = {
   mode: 'backtest',
   trades: [],
   notes: [],
+  allBtNotes: [],
+  allLiveNotes: [],
   charts: {},
   editingTradeId: null,
   currentTab: 'dashboard',
@@ -290,13 +292,24 @@ function setLoginMsg(id, msg, type) {
 
 // ── MODE SCREEN ───────────────────────────────────────────────────────────────
 async function loadAllData() {
-  state.allBtTrades   = await getAllTrades().catch(()=>[]);
-  state.allLiveTrades = await getAllLiveTrades().catch(()=>[]);
+  const [btTrades, liveTrades, btNotes, liveNotes] = await Promise.all([
+    getAllTrades().catch(()=>[]),
+    getAllLiveTrades().catch(()=>[]),
+    getAllNotes().catch(()=>[]),
+    getAllLiveNotes().catch(()=>[])
+  ]);
+  state.allBtTrades   = btTrades;
+  state.allLiveTrades = liveTrades;
+  state.allBtNotes    = btNotes;
+  state.allLiveNotes  = liveNotes;
+  state.lastModeLoadAt = new Date().toISOString();
 }
 
 function renderModeStats() {
   const bt   = state.allBtTrades   || [];
   const live = state.allLiveTrades || [];
+  const btNotes = state.allBtNotes || [];
+  const liveNotes = state.allLiveNotes || [];
   const all  = [...bt, ...live];
   const mBt   = computeMetrics(bt);
   const mLive = computeMetrics(live);
@@ -305,6 +318,10 @@ function renderModeStats() {
   setEl('ms-wr',        mAll.winRate!==null?fmtPct(mAll.winRate):'N/A', mAll.winRate!==null?colorClass(mAll.winRate-.5):'neutral');
   setEl('ms-bt-count',  bt.length);
   setEl('ms-live-count',live.length);
+  setEl('ms-bt-notes-count', btNotes.length);
+  setEl('ms-live-notes-count', liveNotes.length);
+  setEl('ms-total-notes-count', btNotes.length + liveNotes.length);
+  setEl('ms-data-source', `${db && db.cloud ? 'Cloud activo' : 'Solo local'} · actualizado ${state.lastModeLoadAt ? fmtDateTime(state.lastModeLoadAt) : 'ahora'}`);
   setEl('mc-bt-count',  bt.length);
   setEl('mc-bt-wr',     mBt.winRate!==null?fmtPct(mBt.winRate):'N/A');
   setEl('mc-bt-pnl',    fmtPnl(mBt.totalPnl), colorClass(mBt.totalPnl));
