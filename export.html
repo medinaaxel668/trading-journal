@@ -1,71 +1,139 @@
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Exportar Datos</title></head>
-<body style="background:#111;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
-  <div style="text-align:center;max-width:500px;padding:40px">
-    <h1>📥 Exportar Datos</h1>
-    <p id="status" style="color:#888">Preparando...</p>
-    <button id="btn-export" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.1rem;cursor:pointer;display:none">
-      📥 Descargar Backup
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exportar Backup</title>
+</head>
+<body style="background:#111;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px">
+  <div style="text-align:center;max-width:680px;padding:36px;background:#1a1a2e;border-radius:12px;border:1px solid #333">
+    <h1>Exportar backup</h1>
+    <p id="status" style="color:#aaa">Buscando datos guardados en este navegador...</p>
+    <button id="btn-export" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.05rem;cursor:pointer;display:none">
+      Descargar backup
     </button>
-    <div id="result" style="margin-top:20px;text-align:left;font-size:.85rem;color:#aaa"></div>
+    <p style="color:#777;font-size:.85rem;margin-top:18px">Este archivo sirve para mover tus trades y notas a otro equipo o navegador.</p>
+    <div id="result" style="margin-top:20px;text-align:left;font-size:.9rem;color:#aaa;max-height:340px;overflow:auto"></div>
   </div>
+
   <script>
+    const APP_STORES = ['trades', 'notes', 'liveTrades', 'liveNotes'];
+    const KNOWN_DBS = ['tradingAppDB', 'tradingAppDB-zo8mhffzq', 'tradingAppDB-zs0gyiyrz'];
     const status = document.getElementById('status');
     const btn = document.getElementById('btn-export');
     const result = document.getElementById('result');
-    let allData = {};
+    const backup = {
+      meta: {
+        app: 'trading-journal',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        origin: location.origin
+      },
+      stores: Object.fromEntries(APP_STORES.map(name => [name, []])),
+      localStorage: {}
+    };
 
-    async function exportar() {
-      status.textContent = '🔍 Buscando bases de datos...';
-      const dbs = await indexedDB.databases();
-      const oldDBs = dbs.filter(d => d.name && d.name.includes('zs0gyiyrz'));
-      
-      for (const info of oldDBs) {
-        status.textContent = '📂 Abriendo: ' + info.name;
-        const db = await new Promise((res, rej) => {
-          const r = indexedDB.open(info.name);
-          r.onsuccess = e => res(e.target.result);
-          r.onerror = e => rej(e.target.error);
-        });
-        
-        const stores = Array.from(db.objectStoreNames);
-        for (const store of stores) {
-          const items = await new Promise((res, rej) => {
-            const tx = db.transaction(store, 'readonly');
-            const req = tx.objectStore(store).getAll();
-            req.onsuccess = e => res(e.target.result || []);
-            req.onerror = e => res([]);
-          });
-          if (items.length > 0) {
-            allData[store] = items;
-            result.innerHTML += `<div>✅ ${store}: ${items.length} registros</div>`;
+    function log(message, color = '#aaa') {
+      result.innerHTML += `<div style="color:${color};margin:3px 0">${message}</div>`;
+    }
+
+    function openDB(name) {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(name);
+        req.onsuccess = event => resolve(event.target.result);
+        req.onerror = event => reject(event.target.error);
+        req.onblocked = () => reject(new Error('La base esta bloqueada por otra pestana'));
+      });
+    }
+
+    function readStore(database, storeName) {
+      return new Promise(resolve => {
+        if (!database.objectStoreNames.contains(storeName)) return resolve([]);
+        const tx = database.transaction(storeName, 'readonly');
+        const req = tx.objectStore(storeName).getAll();
+        req.onsuccess = event => resolve(event.target.result || []);
+        req.onerror = () => resolve([]);
+      });
+    }
+
+    async function getDatabaseNames() {
+      if (indexedDB.databases) {
+        const dbs = await indexedDB.databases();
+        return [...new Set([
+          ...dbs.map(db => db.name).filter(Boolean),
+          ...KNOWN_DBS
+        ])];
+      }
+      return KNOWN_DBS;
+    }
+
+    function mergeItems(storeName, items) {
+      const byId = new Map(backup.stores[storeName].map(item => [item.id, item]));
+      for (const item of items) {
+        if (!item || !item.id) continue;
+        byId.set(item.id, item);
+      }
+      backup.stores[storeName] = [...byId.values()];
+    }
+
+    async function exportData() {
+      try {
+        const dbNames = await getDatabaseNames();
+        const candidates = dbNames.filter(name => name && name.startsWith('tradingAppDB'));
+
+        for (const dbName of candidates) {
+          try {
+            const database = await openDB(dbName);
+            const stores = APP_STORES.filter(store => database.objectStoreNames.contains(store));
+            if (stores.length === 0) {
+              database.close();
+              continue;
+            }
+
+            log(`Base encontrada: ${dbName}`, '#ddd');
+            for (const store of stores) {
+              const items = await readStore(database, store);
+              mergeItems(store, items);
+              log(`${store}: ${items.length} registros`);
+            }
+            database.close();
+          } catch (error) {
+            log(`No se pudo leer ${dbName}: ${error.message}`, '#ff9800');
           }
         }
-        db.close();
-      }
 
-      const total = Object.values(allData).reduce((s, arr) => s + arr.length, 0);
-      if (total === 0) {
-        status.textContent = '❌ No se encontraron datos en ninguna DB';
-        return;
-      }
+        for (const key of ['journal_custom_tags', 'journal_theme']) {
+          const value = localStorage.getItem(key);
+          if (value !== null) backup.localStorage[key] = value;
+        }
 
-      status.textContent = `✅ ${total} registros encontrados`;
-      btn.style.display = 'inline-block';
+        const counts = APP_STORES.map(store => `${store}: ${backup.stores[store].length}`).join(' | ');
+        const total = APP_STORES.reduce((sum, store) => sum + backup.stores[store].length, 0);
+        if (total === 0) {
+          status.textContent = 'No se encontraron trades ni notas en este navegador.';
+          return;
+        }
+
+        status.textContent = `Listo: ${total} registros encontrados.`;
+        log(`Total final sin duplicados: ${counts}`, '#4caf50');
+        btn.style.display = 'inline-block';
+      } catch (error) {
+        status.textContent = 'Error al preparar el backup: ' + error.message;
+      }
     }
 
     btn.onclick = () => {
-      const json = JSON.stringify(allData, null, 2);
-      const blob = new Blob([json], {type: 'application/json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'trading_journal_backup.json';
-      a.click();
-      status.textContent = '✅ Backup descargado';
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      link.href = URL.createObjectURL(blob);
+      link.download = `trading_journal_backup_${date}.json`;
+      link.click();
+      status.textContent = 'Backup descargado.';
     };
 
-    exportar();
+    exportData();
   </script>
 </body>
 </html>

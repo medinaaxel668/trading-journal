@@ -1,117 +1,142 @@
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Importar Datos</title></head>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Importar Backup</title>
+</head>
 <body style="background:#111;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;flex-direction:column;gap:20px;padding:20px">
-  <div style="text-align:center;max-width:600px;padding:40px;background:#1a1a2e;border-radius:12px;border:1px solid #333">
-    <h1>📤 Importar Datos</h1>
-    <p style="color:#888;font-size:.9rem;margin-bottom:20px">
-      Seleccioná el archivo <code>trading_journal_backup.json</code> que descargaste
+  <div style="text-align:center;max-width:680px;padding:36px;background:#1a1a2e;border-radius:12px;border:1px solid #333">
+    <h1>Importar backup</h1>
+    <p style="color:#aaa;font-size:.95rem;margin-bottom:20px">
+      Selecciona el archivo JSON exportado desde el otro equipo. Se fusiona con tus datos actuales y evita duplicados por ID.
     </p>
-    <input type="file" id="file-input" accept=".json" style="margin-bottom:16px;color:#eee">
+    <input type="file" id="file-input" accept=".json,application/json" style="margin-bottom:16px;color:#eee">
     <br>
-    <button id="btn-import" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.1rem;cursor:pointer;display:none">
-      📤 Importar
+    <button id="btn-import" style="background:#4caf50;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1.05rem;cursor:pointer;display:none">
+      Importar backup
     </button>
     <div id="status" style="margin-top:20px;font-size:.9rem;color:#aaa;text-align:left;max-height:400px;overflow-y:auto"></div>
   </div>
-  <script>
+
+  <script type="module">
+    import { initDB, getDB } from './db.js';
+
+    const APP_STORES = ['trades', 'notes', 'liveTrades', 'liveNotes'];
+    const STORE_MAP = {
+      trades: 'trades',
+      notes: 'notes',
+      liveTrades: 'liveTrades',
+      liveNotes: 'liveNotes',
+      '$trades': 'trades',
+      '$notes': 'notes',
+      '$liveTrades': 'liveTrades',
+      '$liveNotes': 'liveNotes'
+    };
+
     const fileInput = document.getElementById('file-input');
     const btnImport = document.getElementById('btn-import');
     const status = document.getElementById('status');
 
-    function log(msg, color='#aaa') {
-      status.innerHTML += `<div style="color:${color};margin:2px 0">${msg}</div>`;
+    function log(message, color = '#aaa') {
+      status.innerHTML += `<div style="color:${color};margin:3px 0">${message}</div>`;
       status.scrollTop = status.scrollHeight;
     }
 
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
+    function normalizeBackup(raw) {
+      const parsed = JSON.parse(raw);
+      const sourceStores = parsed.stores && typeof parsed.stores === 'object' ? parsed.stores : parsed;
+      const stores = Object.fromEntries(APP_STORES.map(name => [name, []]));
+
+      for (const [sourceName, items] of Object.entries(sourceStores)) {
+        const targetName = STORE_MAP[sourceName];
+        if (!targetName || !Array.isArray(items)) continue;
+        stores[targetName].push(...items);
+      }
+
+      for (const store of APP_STORES) {
+        const byId = new Map();
+        for (const item of stores[store]) {
+          if (!item || !item.id) continue;
+          const clean = { ...item };
+          delete clean['#'];
+          byId.set(clean.id, clean);
+        }
+        stores[store] = [...byId.values()];
+      }
+
+      return {
+        stores,
+        localStorage: parsed.localStorage && typeof parsed.localStorage === 'object' ? parsed.localStorage : {}
+      };
+    }
+
+    fileInput.addEventListener('change', event => {
+      const file = event.target.files[0];
       if (!file) return;
+
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = readerEvent => {
+        status.innerHTML = '';
         try {
-          const data = JSON.parse(ev.target.result);
-          const stores = Object.keys(data);
-          const total = stores.reduce((s, k) => s + (data[k]?.length || 0), 0);
-          log(`📄 Archivo: ${stores.length} colecciones, ${total} registros totales`);
-          log(`📋 Colecciones: ${stores.join(', ')}`);
-          btnImport.dataset.data = ev.target.result;
+          const backup = normalizeBackup(readerEvent.target.result);
+          const counts = APP_STORES.map(store => `${store}: ${backup.stores[store].length}`).join(' | ');
+          const total = APP_STORES.reduce((sum, store) => sum + backup.stores[store].length, 0);
+          log(`Archivo listo: ${total} registros.`);
+          log(counts);
+          btnImport.dataset.backup = JSON.stringify(backup);
           btnImport.style.display = 'inline-block';
-        } catch(e) {
-          log(`❌ Error: ${e.message}`, '#f44336');
+        } catch (error) {
+          log(`Error leyendo el archivo: ${error.message}`, '#f44336');
+          btnImport.style.display = 'none';
         }
       };
       reader.readAsText(file);
     });
 
     btnImport.onclick = async () => {
-      const data = JSON.parse(btnImport.dataset.data);
+      const backup = JSON.parse(btnImport.dataset.backup || '{}');
       btnImport.disabled = true;
-      btnImport.textContent = '⏳ Importando...';
+      btnImport.textContent = 'Importando...';
 
       try {
-        // Cargar Dexie dinámicamente
-        const Dexie = (await import('https://esm.sh/dexie@4.4.2')).default;
-        
-        // Crear DB temporal con el schema correcto
-        const db = new Dexie('tradingAppDB-zo8mhffzq');
-        db.version(3).stores({
-          trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName]',
-          notes:      'id,date,createdAt',
-          liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt',
-          liveNotes:  'id,date,createdAt'
+        await initDB();
+        const db = getDB();
+        log(`Importando en la base activa: ${db.name}`, '#ddd');
+
+        let inserted = 0;
+        let updated = 0;
+        await db.transaction('rw', APP_STORES, async () => {
+          for (const store of APP_STORES) {
+            const table = db.table(store);
+            const items = backup.stores[store] || [];
+            let storeInserted = 0;
+            let storeUpdated = 0;
+
+            for (const item of items) {
+              const exists = await table.get(item.id);
+              await table.put(item);
+              if (exists) storeUpdated++;
+              else storeInserted++;
+            }
+
+            inserted += storeInserted;
+            updated += storeUpdated;
+            log(`${store}: ${storeInserted} nuevos, ${storeUpdated} actualizados`, '#4caf50');
+          }
         });
-        await db.open();
 
-        // Mapear nombres de stores del backup a los de la app
-        const storeMap = {
-          'trades': 'trades',
-          'notes': 'notes',
-          'liveTrades': 'liveTrades',
-          'liveNotes': 'liveNotes',
-          '$trades': 'trades',
-          '$notes': 'notes',
-          '$liveTrades': 'liveTrades',
-          '$liveNotes': 'liveNotes'
-        };
-
-        let totalOk = 0;
-        let totalErr = 0;
-
-        for (const [exportStore, items] of Object.entries(data)) {
-          if (!items || items.length === 0) continue;
-          
-          const targetStore = storeMap[exportStore];
-          if (!targetStore) {
-            log(`⏭️ Saltando "${exportStore}" (colección interna del sistema)`, '#ff9800');
-            continue;
-          }
-
-          try {
-            // Usar bulkAdd para insertar todos los items
-            const cleanItems = items.map(item => {
-              // Remover campos internos de Dexie Cloud si existen
-              const { '#': internal, ...rest } = item;
-              return rest;
-            });
-            
-            await db.table(targetStore).bulkAdd(cleanItems);
-            log(`✅ "${exportStore}" → ${targetStore}: ${items.length} registros`, '#4caf50');
-            totalOk += items.length;
-          } catch(e) {
-            log(`⚠️ "${exportStore}": ${e.message}`, '#ff9800');
-            totalErr++;
-          }
+        for (const [key, value] of Object.entries(backup.localStorage || {})) {
+          if (key.startsWith('journal_')) localStorage.setItem(key, value);
         }
 
-        db.close();
-        log(`━━━━━━━━━━━━━━━━━━━━━`, '#888');
-        log(`🎉 Importación completada: ${totalOk} registros importados`, '#4caf50');
-        log(`🔄 Recargá la app para ver los datos`, '#888');
-        btnImport.textContent = '✅ Importado';
-      } catch(e) {
-        log(`❌ Error general: ${e.message}`, '#f44336');
-        btnImport.textContent = '📤 Importar';
+        log('━━━━━━━━━━━━━━━━━━━━━', '#777');
+        log(`Importación completa: ${inserted} nuevos, ${updated} actualizados.`, '#4caf50');
+        log('Vuelve a abrir la app para ver los datos actualizados.', '#aaa');
+        btnImport.textContent = 'Importado';
+      } catch (error) {
+        log(`Error importando: ${error.message}`, '#f44336');
+        btnImport.textContent = 'Importar backup';
         btnImport.disabled = false;
       }
     };

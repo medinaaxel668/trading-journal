@@ -406,77 +406,11 @@ function bindModeLogout() {
     else showLoginScreen();
   };
   
-  // Botón para exportar datos de la DB vieja
-  const btnExport = document.getElementById('btn-export-old');
-  if (btnExport) btnExport.onclick = async () => {
-    btnExport.textContent = '⏳ Exportando...';
-    btnExport.disabled = true;
-    try {
-      const oldDBName = 'tradingAppDB-zs0gyiyrz';
-      const open = indexedDB.open(oldDBName);
-      open.onsuccess = function(e) {
-        const db = e.target.result;
-        // Listar stores disponibles
-        const storeNames = Array.from(db.objectStoreNames);
-        console.log('[Export] Stores disponibles:', storeNames);
-        let allData = {};
-        let pendientes = storeNames.length;
-        if (pendientes === 0) {
-          showToast('No hay stores en la DB vieja', 'error');
-          btnExport.textContent = '📥 Exportar DB vieja';
-          btnExport.disabled = false;
-          return;
-        }
-        storeNames.forEach(store => {
-          try {
-            const tx = db.transaction(store, 'readonly');
-            const req = tx.objectStore(store).getAll();
-            req.onsuccess = function(r) {
-              allData[store] = r.target.result || [];
-              pendientes--;
-              if (pendientes === 0) {
-                const json = JSON.stringify(allData, null, 2);
-                const blob = new Blob([json], {type: 'application/json'});
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'trading_journal_backup.json';
-                a.click();
-                showToast('✅ Backup descargado', 'success');
-                btnExport.textContent = '📥 Exportar DB vieja';
-                btnExport.disabled = false;
-              }
-            };
-            req.onerror = function() {
-              allData[store] = [];
-              pendientes--;
-              if (pendientes === 0) {
-                showToast('Backup descargado (parcial)', 'success');
-                btnExport.textContent = '📥 Exportar DB vieja';
-                btnExport.disabled = false;
-              }
-            };
-          } catch(e) {
-            allData[store] = [];
-            pendientes--;
-            if (pendientes === 0) {
-              showToast('Backup descargado (parcial)', 'success');
-              btnExport.textContent = '📥 Exportar DB vieja';
-              btnExport.disabled = false;
-            }
-          }
-        });
-      };
-      open.onerror = function() {
-        showToast('No se pudo abrir la DB vieja', 'error');
-        btnExport.textContent = '📥 Exportar DB vieja';
-        btnExport.disabled = false;
-      };
-    } catch(e) {
-      showToast('Error: ' + e.message, 'error');
-      btnExport.textContent = '📥 Exportar DB vieja';
-      btnExport.disabled = false;
-    }
-  };
+  const btnExport = document.getElementById('btn-export-backup');
+  if (btnExport) btnExport.onclick = () => { window.location.href = './export.html'; };
+
+  const btnImport = document.getElementById('btn-import-backup');
+  if (btnImport) btnImport.onclick = () => { window.location.href = './import.html'; };
 }
 
 async function migrateTradesToTags() {
