@@ -92,6 +92,33 @@ header {
   margin-bottom: 40px;
 }
 
+.diagnostic-panel {
+  margin-top: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px 20px;
+  box-shadow: var(--shadow);
+}
+.diagnostic-panel[open] {
+  padding-bottom: 22px;
+}
+.diagnostic-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.diagnostic-summary::-webkit-details-marker { display: none; }
+.diagnostic-summary-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
 .mode-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -381,6 +408,7 @@ header {
 }
 .badge-buy { background: rgba(76,175,80,0.12); color: var(--green); border: 1px solid rgba(76,175,80,0.3); }
 .badge-sell { background: rgba(214,40,40,0.12); color: var(--red); border: 1px solid rgba(214,40,40,0.3); }
+.badge-side { background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid var(--border); }
 .badge-tp { background: rgba(76,175,80,0.12); color: var(--green); border: 1px solid rgba(76,175,80,0.3); }
 .badge-sl { background: rgba(214,40,40,0.12); color: var(--red); border: 1px solid rgba(214,40,40,0.3); }
 .badge-be { background: rgba(255,193,7,0.12); color: #ffc107; border: 1px solid rgba(255,193,7,0.3); }
@@ -504,6 +532,7 @@ body.light-mode .daywr-bar-wrap { background: rgba(0,0,0,0.05); }
 .cal-day.no-data { background: transparent; }
 .cal-day.pos { background: rgba(76,175,80,0.15); border-color: rgba(76,175,80,0.3); color: var(--green); }
 .cal-day.neg { background: rgba(244,67,54,0.15); border-color: rgba(244,67,54,0.3); color: var(--red); }
+.cal-day.be { background: rgba(215,196,106,0.18); border-color: rgba(215,196,106,0.45); color: var(--gold); }
 .cal-num { position: absolute; top: 2px; left: 4px; font-size: 0.6rem; opacity: 0.7; font-weight: 600; }
 .cal-pnl { font-weight: 800; }
 .calendar-head {
@@ -558,4 +587,5 @@ body.light-mode .daywr-bar-wrap { background: rgba(0,0,0,0.05); }
   .mode-preview {
     width: 112px;
   }
+  .diagnostic-summary { align-items: flex-start; flex-direction: column; }
 }

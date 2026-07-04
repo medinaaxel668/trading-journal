@@ -612,7 +612,7 @@ function renderDashboard() {
   container.innerHTML=recent.map(t=>`
     <div class="recent-item">
       <span class="recent-symbol">${esc(t.symbol)}</span>
-      <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span>
+      <span class="badge badge-side">${t.side}</span>
       <span class="badge ${badgeResult(t.result)}">${t.result}</span>
       <span class="recent-date">${fmtDate(t.date)}</span>
       <span class="recent-pnl ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</span>
@@ -1275,7 +1275,13 @@ function renderDayWR(trades){
 
 function renderPerfCalendar(trades){
   const wrap=document.getElementById('perf-calendar-wrap'); if(!wrap)return;
-  const byDay={};trades.forEach(t=>{byDay[t.date]=(byDay[t.date]||0)+t.pnl;});
+  const byDay={};
+  trades.forEach(t=>{
+    if(!byDay[t.date]) byDay[t.date]={ pnl:0, hasBe:false, hasTrades:false };
+    byDay[t.date].pnl+=t.pnl;
+    byDay[t.date].hasTrades=true;
+    if(t.result==='BE') byDay[t.date].hasBe=true;
+  });
   if(Object.keys(byDay).length===0){wrap.innerHTML='<div class="empty-state" style="padding:24px">Sin datos</div>';return;}
   const month=state.analyticsCalendarMonth || getAvailableCalendarMonths(trades).slice(-1)[0];
   if(!month){wrap.innerHTML='<div class="empty-state" style="padding:24px">Sin datos</div>';return;}
@@ -1287,9 +1293,13 @@ function renderPerfCalendar(trades){
   for(let i=0;i<offset;i++)cells+=`<div class="cal-day empty"></div>`;
   for(let d=1;d<=daysInMonth;d++){
     const key=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const pnl=byDay[key];
-    if(pnl===undefined)cells+=`<div class="cal-day no-data"><span class="cal-num">${d}</span></div>`;
-    else cells+=`<div class="cal-day ${pnl>=0?'pos':'neg'}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnl>=0?'+':''}${pnl.toFixed(0)}$</span></div>`;
+    const day=byDay[key];
+    if(!day)cells+=`<div class="cal-day no-data"><span class="cal-num">${d}</span></div>`;
+    else {
+      const cls = day.hasBe ? 'be' : (day.pnl>=0 ? 'pos' : 'neg');
+      const pnlLabel = day.pnl>=0?'+':''; 
+      cells+=`<div class="cal-day ${cls}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnlLabel}${day.pnl.toFixed(0)}$</span></div>`;
+    }
   }
   wrap.innerHTML=`<div class="calendar-month">
       <div class="perf-calendar">
