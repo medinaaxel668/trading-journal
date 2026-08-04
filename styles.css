@@ -329,9 +329,18 @@ header {
 .positive { color: var(--green); }
 .negative { color: var(--red); }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tag-chip-wrap { display: inline-flex; align-items: stretch; }
 .tag-chip { background: var(--bg-input); border: 1px solid var(--border); padding: 5px 12px; border-radius: 15px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
 .tag-chip:hover { border-color: var(--accent); }
 .tag-chip.active { background: var(--accent); color: var(--bg-deep); }
+.tag-chip-wrap .tag-chip { border-radius: 15px 0 0 15px; }
+.tag-chip-remove { background: var(--bg-input); border: 1px solid var(--border); border-left: 0; border-radius: 0 15px 15px 0; color: var(--text-muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 3px 8px 5px; transition: color .2s, background .2s, border-color .2s; }
+.tag-chip-remove:hover { background: var(--red); border-color: var(--red); color: #fff; }
+.tag-chip-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tag-add-control, .tag-add-form { display: inline-flex; align-items: center; gap: 6px; }
+.tag-add-input { width: 145px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 15px; color: var(--text); font: inherit; font-size: .75rem; padding: 6px 10px; outline: none; }
+.tag-add-input:focus { border-color: var(--accent); }
+.tag-add-submit { background: var(--accent); border: 1px solid var(--accent); border-radius: 15px; color: var(--bg-deep); cursor: pointer; font-size: .75rem; font-weight: 700; padding: 6px 10px; }
 
 /* ── MODALS ──────────────────────────────────────────────────────────────── */
 .modal-overlay {

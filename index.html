@@ -264,6 +264,12 @@
       <div class="mode-stat-card" style="margin-bottom:24px">
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px,1fr));gap:12px">
           <select id="filter-tag" class="form-select"></select>
+          <select id="filter-session" class="form-select" title="Sesión">
+            <option value="">Todas las sesiones</option>
+            <option value="Asia">Asia</option>
+            <option value="New York">New York</option>
+            <option value="London">London</option>
+          </select>
           <select id="filter-result" class="form-select"><option value="">Cualquier resultado</option><option value="TP">TP</option><option value="SL">SL</option><option value="BE">BE</option></select>
           <select id="filter-smt" class="form-select"><option value="">SMT (Cualquiera)</option><option value="true">Sí (✓)</option><option value="false">No (✗)</option></select>
           <select id="filter-sort" class="form-select">
@@ -339,6 +345,7 @@
     <section id="tab-notes" class="tab-section">
       <div class="mode-stat-card">
         <textarea id="note-text" class="form-input" style="height:150px;margin-bottom:16px" placeholder="Reflexión de hoy..."></textarea>
+        <textarea id="note-links" class="form-input" rows="2" style="margin-bottom:16px" placeholder="Links opcionales (uno por línea)"></textarea>
         <button id="btn-add-note" class="btn-enter-mode">Guardar Nota</button>
       </div>
       <div id="notes-list" style="margin-top:24px"></div>

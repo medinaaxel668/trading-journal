@@ -22,7 +22,8 @@ const state = {
   analyticsCalendarMonths: [],
   analyticsCalendarMonth: '',
   customTags: JSON.parse(localStorage.getItem('journal_custom_tags') || '[]'),
-  historyFilters: { tag:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent' },
+  hiddenTags: JSON.parse(localStorage.getItem('journal_hidden_tags') || '[]'),
+  historyFilters: { tag:'', session:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent' },
   bound: false // flag para evitar listeners duplicados
 };
 
@@ -448,18 +449,27 @@ function renderTagCloud(containerId, inputId) {
   state.customTags.forEach(tag => allTags.add(tag));
   // Incluir SMT siempre por defecto
   allTags.add('SMT');
-  const sortedTags = [...allTags].sort();
+  const sortedTags = [...allTags].filter(tag => !state.hiddenTags.includes(tag)).sort();
 
   const getCurrentTags = () => input.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
 
   let html = sortedTags.map(tag => {
     const active = getCurrentTags().includes(tag);
     const isCustom = state.customTags.includes(tag);
-    return `<button type="button" class="tag-chip ${active?'active':''} ${isCustom?'custom':''}" data-tag="${esc(tag)}">${esc(tag)}</button>`;
+    return `<span class="tag-chip-wrap">
+      <button type="button" class="tag-chip ${active?'active':''} ${isCustom?'custom':''}" data-tag="${esc(tag)}">${esc(tag)}</button>
+      <button type="button" class="tag-chip-remove" data-tag="${esc(tag)}" title="Ocultar etiqueta" aria-label="Ocultar etiqueta ${esc(tag)}">×</button>
+    </span>`;
   }).join('');
 
-  // Botón "+" para añadir nueva variante
-  html += `<button type="button" class="tag-chip btn-add-tag-variant" title="Añadir nueva variante">+</button>`;
+  // Control integrado para añadir etiquetas (evita usar prompt(), no compatible con algunos navegadores integrados)
+  html += `<span class="tag-add-control">
+    <button type="button" class="tag-chip btn-add-tag-variant" title="Añadir nueva etiqueta" aria-label="Añadir nueva etiqueta">+</button>
+    <span class="tag-add-form" hidden>
+      <input type="text" class="tag-add-input" placeholder="Nueva etiqueta" aria-label="Nueva etiqueta" />
+      <button type="button" class="tag-add-submit">Añadir</button>
+    </span>
+  </span>`;
   
   container.innerHTML = html;
 
@@ -477,20 +487,46 @@ function renderTagCloud(containerId, inputId) {
     };
   });
 
+  container.querySelectorAll('.tag-chip-remove').forEach(btn => {
+    btn.onclick = () => {
+      const tag = btn.dataset.tag;
+      state.hiddenTags = [...new Set([...state.hiddenTags, tag])];
+      state.customTags = state.customTags.filter(item => item !== tag);
+      localStorage.setItem('journal_hidden_tags', JSON.stringify(state.hiddenTags));
+      localStorage.setItem('journal_custom_tags', JSON.stringify(state.customTags));
+      input.value = getCurrentTags().filter(item => item !== tag).join(', ');
+      renderTagCloud(containerId, inputId);
+      showToast(`Etiqueta “${tag}” ocultada. Los trades existentes no cambian.`, 'success');
+    };
+  });
+
   const addBtn = container.querySelector('.btn-add-tag-variant');
-  if (addBtn) {
+  const addForm = container.querySelector('.tag-add-form');
+  const addInput = container.querySelector('.tag-add-input');
+  const addSubmit = container.querySelector('.tag-add-submit');
+  const addTag = () => {
+    const cleanTag = (addInput?.value || '').trim().toUpperCase();
+    if (!cleanTag) return;
+    state.hiddenTags = state.hiddenTags.filter(tag => tag !== cleanTag);
+    localStorage.setItem('journal_hidden_tags', JSON.stringify(state.hiddenTags));
+    if (!state.customTags.includes(cleanTag)) {
+      state.customTags.push(cleanTag);
+      localStorage.setItem('journal_custom_tags', JSON.stringify(state.customTags));
+    }
+    input.value = [...getCurrentTags(), cleanTag].filter((tag, index, tags) => tags.indexOf(tag) === index).join(', ');
+    renderTagCloud(containerId, inputId);
+  };
+  if (addBtn && addForm && addInput) {
     addBtn.onclick = () => {
-      const newTag = prompt('Escribe el nombre de la nueva etiqueta:');
-      if (newTag) {
-        const cleanTag = newTag.trim().toUpperCase();
-        if (cleanTag && !state.customTags.includes(cleanTag)) {
-          state.customTags.push(cleanTag);
-          localStorage.setItem('journal_custom_tags', JSON.stringify(state.customTags));
-          renderTagCloud(containerId, inputId);
-        }
-      }
+      addForm.hidden = !addForm.hidden;
+      if (!addForm.hidden) addInput.focus();
+    };
+    addInput.onkeydown = event => {
+      if (event.key === 'Enter') { event.preventDefault(); addTag(); }
+      if (event.key === 'Escape') addForm.hidden = true;
     };
   }
+  if (addSubmit) addSubmit.onclick = addTag;
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────────
@@ -832,9 +868,10 @@ function populateTagFilter() {
 }
 
 function bindHistoryFilters() {
-  const ids=['filter-tag','filter-smt','filter-result','filter-sort','filter-date-from','filter-date-to'];
+  const ids=['filter-tag','filter-session','filter-smt','filter-result','filter-sort','filter-date-from','filter-date-to'];
   const update=()=>{
     state.historyFilters.tag     =document.getElementById('filter-tag')?.value||'';
+    state.historyFilters.session =document.getElementById('filter-session')?.value||'';
     state.historyFilters.smt     =document.getElementById('filter-smt')?.value||'';
     state.historyFilters.result  =document.getElementById('filter-result')?.value||'';
     state.historyFilters.sort    =document.getElementById('filter-sort')?.value||'recent';
@@ -850,6 +887,7 @@ function renderHistory() {
   let trades=[...state.trades];
   const f=state.historyFilters;
   if(f.tag) trades=trades.filter(t=>(t.tags||[]).includes(f.tag));
+  if(f.session) trades=trades.filter(t=>t.killZone===f.session);
   if(f.smt !== '') {
     const smtBool = f.smt === 'true';
     trades=trades.filter(t=>t.smt === smtBool);
@@ -1378,12 +1416,14 @@ function barChart(ctx,labels,data,label){
 function bindNoteForm(){
   document.getElementById('btn-add-note').addEventListener('click', async()=>{
     const textEl=document.getElementById('note-text'),linksEl=document.getElementById('note-links');
-    const text=textEl.value.trim(),links=linksEl.value.split('\n').map(l=>l.trim()).filter(Boolean);
+    const text=textEl.value.trim();
+    const links=(linksEl?.value||'').split('\n').map(l=>l.trim()).filter(Boolean);
     if(!text){showToast('Escribe algo en la nota','error');return;}
     try {
       if(state.mode==='live') await addLiveNote({text,links});
       else await addNote({text,links});
-      textEl.value='';linksEl.value='';
+      textEl.value='';
+      if(linksEl) linksEl.value='';
       showToast('Nota guardada','success');
       await loadData(); renderNotes();
     } catch(err){showToast(err.message,'error');}
