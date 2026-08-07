@@ -895,10 +895,12 @@ function renderHistory() {
   if(f.result)   trades=trades.filter(t=>t.result===f.result);
   if(f.dateFrom) trades=trades.filter(t=>t.date>=f.dateFrom);
   if(f.dateTo)   trades=trades.filter(t=>t.date<=f.dateTo);
+  const getTradeDate = t => new Date(`${t.date}T00:00:00`).getTime();
   const getLoadedAt = t => new Date(t.createdAt || `${t.date}T00:00:00`).getTime();
   trades.sort((a,b)=>{
-    const diff = getLoadedAt(a) - getLoadedAt(b);
-    return f.sort === 'oldest' ? diff : -diff;
+    const sortByLoadDate = f.sort === 'loaded-recent' || f.sort === 'loaded-oldest';
+    const diff = (sortByLoadDate ? getLoadedAt(a) - getLoadedAt(b) : getTradeDate(a) - getTradeDate(b));
+    return f.sort === 'oldest' || f.sort === 'loaded-oldest' ? diff : -diff;
   });
   const container=document.getElementById('trade-list');
   if(trades.length===0){
