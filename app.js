@@ -8,6 +8,19 @@ import {
   getAllLiveNotes, addLiveNote, deleteLiveNote
 } from './db.js';
 
+function readStoredArray(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn(`[storage] No pude leer ${key}, usando []:`, e.message);
+    try { localStorage.removeItem(key); } catch (_) {}
+    return [];
+  }
+}
+
 // ── STATE ────────────────────────────────────────────────────────────────────
 const state = {
   mode: 'backtest',
@@ -21,8 +34,8 @@ const state = {
   analyticsTags: [],
   analyticsCalendarMonths: [],
   analyticsCalendarMonth: '',
-  customTags: JSON.parse(localStorage.getItem('journal_custom_tags') || '[]'),
-  hiddenTags: JSON.parse(localStorage.getItem('journal_hidden_tags') || '[]'),
+  customTags: readStoredArray('journal_custom_tags'),
+  hiddenTags: readStoredArray('journal_hidden_tags'),
   historyFilters: { tag:'', session:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent' },
   bound: false // flag para evitar listeners duplicados
 };

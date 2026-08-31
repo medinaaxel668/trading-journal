@@ -456,12 +456,31 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module">
-  import { boot } from './app.js';
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  const showBootFailure = (error) => {
+    console.error('[boot] No se pudo iniciar la app:', error);
+    const login = document.getElementById('login-screen');
+    const mode = document.getElementById('mode-screen');
+    const app = document.getElementById('app-screen');
+    if (login) login.style.display = 'flex';
+    if (mode) mode.style.display = 'none';
+    if (app) app.style.display = 'none';
+    const msg = document.getElementById('login-msg');
+    if (msg) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'No pude cargar la app. Probá limpiar la caché del navegador o borrar los datos del sitio.';
+    }
+  };
+
+  import('./app.js')
+    .then(({ boot }) => {
+      const runBoot = () => boot().catch(showBootFailure);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', runBoot, { once: true });
+      } else {
+        runBoot();
+      }
+    })
+    .catch(showBootFailure);
 </script>
 </body>
 </html>
