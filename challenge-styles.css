@@ -1,0 +1,5 @@
+/* ── CHALLENGE MODULE — Estilos adicionales ─────────────────────────────── */
+.badge-mode-challenge {
+  background: var(--accent) !important;
+  color: var(--bg-deep) !important;
+}

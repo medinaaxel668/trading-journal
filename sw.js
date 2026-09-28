@@ -1,10 +1,15 @@
-const CACHE_NAME = 'trading-journal-v4';
+const CACHE_NAME = 'trading-journal-v7';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './challenge-styles.css',
   './app.js',
   './db.js',
+  './challenge.js',
+  './challenge-ui.js',
+  './insights.js',
+  './trade-insights.js',
   './manifest.json'
 ];
 

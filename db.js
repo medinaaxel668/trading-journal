@@ -30,11 +30,12 @@ export async function initDB() {
   }
 
   // ── Schema completo: incluye liveTrades y liveNotes ──────────────────────────
-  db.version(3).stores({
+  db.version(4).stores({
     trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName]',
     notes:      'id,date,createdAt',
     liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt',
-    liveNotes:  'id,date,createdAt'
+    liveNotes:  'id,date,createdAt',
+    challenges: 'id,type,firma,status,createdAt,fechaInicioExamen'
   });
 
   await db.open();

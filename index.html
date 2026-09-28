@@ -11,6 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232D2D2D'/%3E%3Cpolyline points='6,22 12,14 17,18 22,10 26,14' stroke='%23D7C9AE' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="challenge-styles.css" />
 </head>
 <body>
 
@@ -67,6 +68,11 @@
         <div id="ms-live-count" class="mode-stat-value">---</div>
         <div class="mode-stat-sub">trades</div>
       </div>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Challenge</div>
+        <div id="ms-ch-count" class="mode-stat-value">---</div>
+       <div class="mode-stat-sub">pruebas</div>
+      </div>
     </div>
 
       <div class="modes-grid">
@@ -83,6 +89,13 @@
           <p class="mode-desc">Registrá tus sesiones reales y analizá tu psicología.</p>
           <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-live-count">0</span> | P&L: <span id="mc-live-pnl">0</span> | WR: <span id="mc-live-wr">0</span></div>
           <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Live →</button>
+        </div>
+          <div class="mode-card-item" onclick="enterMode('challenge')">
+          <div class="mode-preview" style="display:flex;align-items:center;justify-content:center;font-size:4rem;background:linear-gradient(135deg, rgba(215,201,174,.1), rgba(215,201,174,.05))">🏆</div>
+          <h3 class="mode-title">Challenge</h3>
+          <p class="mode-desc">Exámenes de fondeo, conversión a retiros, ROI y comparativa simulado vs real.</p>
+          <div class="mode-stat-label" style="margin-top: 10px;">Pruebas: <span id="mc-ch-count">0</span> | Retiros: <span id="mc-ch-withdrawals">0</span> | ROI: <span id="mc-ch-roi">0%</span></div>
+          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Challenge →</button>
         </div>
       </div>
 
@@ -128,6 +141,7 @@
         <button class="tab-btn" data-tab="history">Historial</button>
         <button class="tab-btn" data-tab="analytics">Analytics</button>
         <button class="tab-btn" data-tab="notes">Notas</button>
+        <button class="tab-btn" data-tab="insights">🤖 Insights</button>
       </nav>
       <div class="mode-user-info">
         <button type="button" id="theme-toggle" class="icon-toggle" data-theme-toggle aria-label="Cambiar tema"></button>
@@ -351,6 +365,13 @@
         <button id="btn-add-note" class="btn-enter-mode">Guardar Nota</button>
       </div>
       <div id="notes-list" style="margin-top:24px"></div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section id="tab-insights" class="tab-section">
+      <div id="insights-content" style="text-align:center;padding:40px">
+        <div style="font-size:1.2rem;color:var(--text-muted)">Cargando insights...</div>
+      </div>
     </section>
   </main>
 </div>

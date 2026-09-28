@@ -7,8 +7,11 @@ import {
   getAllNotes, addNote, deleteNote,
   getAllLiveNotes, addLiveNote, deleteLiveNote
 } from './db.js';
+import { enterChallengeMode, restoreOriginalTabs } from './challenge-ui.js';
+import { getAllChallenges, computeChallengeMetrics } from './challenge.js';
+import { generateTradeInsights } from './trade-insights.js';
 
-function readStoredArray(key) {
+ function readStoredArray(key) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return [];
@@ -181,22 +184,27 @@ window.showModeScreen = async function() { await showModeScreen(); };
 window.goToModeScreen = async function() { await showModeScreen(); };
 
 window.enterMode = async function(mode) {
+  if (mode === 'challenge') {
+    await enterChallengeMode();
+    return;
+  }
+  
   state.mode = mode;
   state.analyticsStrategy = '';
+  state.bound = false;
   showAppScreen();
+  restoreOriginalTabs();
   setupModeUI();
   
-  if (!state.bound) {
-    resetFormListeners();
-    bindNav();
-    bindTradeForm();
-    bindEditModal();
-    bindDetailModal();
-    bindNoteForm();
-    bindMonthYearFilter();
-    bindHistoryFilters();
-    state.bound = true;
-  }
+  resetFormListeners();
+  bindNav();
+  bindTradeForm();
+  bindEditModal();
+  bindDetailModal();
+  bindNoteForm();
+  bindMonthYearFilter();
+  bindHistoryFilters();
+  state.bound = true;
   
   await waitForSync();
   await loadData();
@@ -343,6 +351,14 @@ function renderModeStats() {
   setEl('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
   setEl('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
   renderModePreviews(bt, live);
+  // Challenge stats
+ getAllChallenges().then(challenges => {
+  const m = computeChallengeMetrics(challenges);
+  setEl('ms-ch-count', m.total);
+  setEl('mc-ch-count', m.total);
+  setEl('mc-ch-withdrawals', m.withdrawals);
+  setEl('mc-ch-roi', `${m.roi >= 0 ? '+' : ''}${m.roi}%`);
+ }).catch(() => {});
   if (db && db.cloud && !state.cloudSubscribed) {
     state.cloudSubscribed = true;
     try {
@@ -574,6 +590,7 @@ function bindNav() {
       state.currentTab = tab;
       if (tab==='dashboard') renderDashboard();
       if (tab==='analytics') renderAnalytics();
+      if (tab==='insights') renderInsights();
     });
   });
 }
@@ -1530,6 +1547,351 @@ function esc(str){return String(str??'').replace(/&/g,'&amp;').replace(/</g,'&lt
 function groupBy(arr,fn){return arr.reduce((acc,item)=>{const k=fn(item);if(!acc[k])acc[k]=[];acc[k].push(item);return acc;},{});}
 function isoWeek(dateStr){const d=new Date(dateStr+'T12:00:00');const jan4=new Date(d.getFullYear(),0,4);const week1=new Date(jan4.getTime()-(jan4.getDay()||7-1)*86400000);return d.getFullYear()+'-W'+String(Math.ceil((d-week1)/(7*86400000))).padStart(2,'0');}
 function setEl(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls)el.className='card-value '+cls;}
+
+// ── INSIGHTS ───────────────────────────────────────────────────────────────────
+async function renderInsights() {
+  const container = document.getElementById('insights-content');
+  if (!container) return;
+
+  container.innerHTML = '<div style="text-align:center;padding:40px"><div style="font-size:1.2rem;color:var(--text-muted)">Generando insights...</div></div>';
+
+  try {
+    const data = await generateTradeInsights(state.mode);
+    container.innerHTML = buildInsightsHTML(data);
+  } catch (err) {
+    console.error('[renderInsights] Error:', err);
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)"><div style="font-size:1.2rem">Error generando insights: ${err.message}</div></div>`;
+  }
+}
+
+function buildInsightsHTML(data) {
+  const { mode, insights, warnings, strengths, metrics, tagCombos, tagSynergies, singleTags, killZones, smt, symbols, daysOfWeek } = data;
+
+  if (!metrics) {
+    return `<div class="mode-stat-card" style="text-align:center">
+      <div class="empty-state-icon">🤖</div>
+      <h3 style="margin:16px 0 8px">Sin datos para analizar</h3>
+      <p style="color:var(--text-muted)">Registra trades en ${mode} para ver insights automáticos.</p>
+    </div>`;
+  }
+
+  let html = '';
+
+  // Header con métricas clave
+  html += `
+    <div class="mode-stats-grid" style="margin-bottom:24px">
+      <div class="card"><div class="card-label">P&L Total</div><div class="card-value ${metrics.totalPnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(metrics.totalPnl)}</div></div>
+      <div class="card"><div class="card-label">Win Rate</div><div class="card-value">${metrics.winRate.toFixed(1)}%</div><div class="card-sub">excl. BE</div></div>
+      <div class="card"><div class="card-label">Expected Value</div><div class="card-value ${metrics.ev >= 0 ? 'positive' : 'negative'}">${fmtPnl(metrics.ev)}</div><div class="card-sub">por trade</div></div>
+      <div class="card"><div class="card-label">Profit Factor</div><div class="card-value ${metrics.profitFactor && metrics.profitFactor >= 1.5 ? 'positive' : metrics.profitFactor && metrics.profitFactor < 1.2 ? 'negative' : 'neutral'}">${metrics.profitFactor ? metrics.profitFactor.toFixed(2) : 'N/A'}</div></div>
+      <div class="card"><div class="card-label">RR Promedio</div><div class="card-value">${metrics.avgRR ? metrics.avgRR.toFixed(2) : 'N/A'}R</div></div>
+      <div class="card"><div class="card-label">Max Drawdown</div><div class="card-value ${metrics.maxDD < 0 ? 'negative' : 'neutral'}">${fmtPnl(metrics.maxDD)}</div></div>
+    </div>
+  `;
+
+  // Fortalezas
+  if (strengths.length > 0) {
+    html += `
+      <div class="mode-stat-card" style="margin-bottom:24px">
+        <div class="card-label" style="color:var(--green);margin-bottom:16px">✅ Fortalezas Detectadas</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${strengths.map(s => `
+            <div style="background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:12px;padding:16px">
+              <div style="display:flex;align-items:flex-start;gap:12px">
+                <span style="font-size:1.5rem">${s.icon}</span>
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:1rem">${s.title}</div>
+                  <div style="color:var(--text-muted);margin:4px 0">${s.message}</div>
+                  <div style="font-size:0.85rem;color:var(--green);margin-top:8px">💡 ${s.recommendation}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Advertencias
+  if (warnings.length > 0) {
+    html += `
+      <div class="mode-stat-card" style="margin-bottom:24px">
+        <div class="card-label" style="color:var(--red);margin-bottom:16px">⚠️ Áreas de Mejora</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${warnings.map(w => `
+            <div style="background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.3);border-radius:12px;padding:16px">
+              <div style="display:flex;align-items:flex-start;gap:12px">
+                <span style="font-size:1.5rem">${w.icon}</span>
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:1rem">${w.title}</div>
+                  <div style="color:var(--text-muted);margin:4px 0">${w.message}</div>
+                  <div style="font-size:0.85rem;color:var(--red);margin-top:8px">🔧 ${w.recommendation}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Insights informativos
+  if (insights.length > 0) {
+    html += `
+      <div class="mode-stat-card" style="margin-bottom:24px">
+        <div class="card-label" style="color:var(--blue);margin-bottom:16px">💡 Insights</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${insights.map(i => `
+            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:12px;padding:16px">
+              <div style="display:flex;align-items:flex-start;gap:12px">
+                <span style="font-size:1.5rem">${i.icon}</span>
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:1rem">${i.title}</div>
+                  <div style="color:var(--text-muted);margin:4px 0">${i.message}</div>
+                  <div style="font-size:0.85rem;color:var(--blue);margin-top:8px">💡 ${i.recommendation}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Top combinaciones de tags
+  if (tagCombos.length > 0) {
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          🏷️ Top Combinaciones de Tags (min 3 trades)
+        </summary>
+        <div style="margin-top:16px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);text-align:left">
+                <th style="padding:8px">Combinación</th>
+                <th style="padding:8px">Trades</th>
+                <th style="padding:8px">P&L Total</th>
+                <th style="padding:8px">P&L/Trade</th>
+                <th style="padding:8px">Win Rate</th>
+                <th style="padding:8px">TP / SL / BE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tagCombos.map(c => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                  <td style="padding:8px;font-family:monospace;font-size:0.75rem">${c.combo.replace(/\+/g, ' + ')}</td>
+                  <td style="padding:8px">${c.count}</td>
+                  <td style="padding:8px;color:${c.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(c.totalPnl)}</td>
+                  <td style="padding:8px;color:${c.avgPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(c.avgPnl)}</td>
+                  <td style="padding:8px">${c.winRate.toFixed(1)}%</td>
+                  <td style="padding:8px">${c.wins} / ${c.losses} / ${c.bes}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
+  }
+
+  // Sinergias
+  if (tagSynergies.length > 0) {
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          🔗 Sinergias Detectadas (tags que funcionan mejor juntos)
+        </summary>
+        <div style="margin-top:16px">
+          ${tagSynergies.map(s => `
+            <div style="background:rgba(215,201,174,0.1);border:1px solid rgba(215,201,174,0.3);border-radius:8px;padding:12px;margin-bottom:8px">
+              <div style="font-weight:600">${s.tags.join(' + ')}</div>
+              <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px">
+                ${s.count} trades · P&L: ${fmtPnl(s.totalPnl)} · WR actual: ${s.actualWR}% vs esperado: ${s.expectedWR}% 
+                <span style="color:var(--green);font-weight:600"> (+${s.synergy}% sinergia)</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  }
+
+  // Tags individuales
+  if (singleTags.length > 0) {
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          📊 Tags Individuales
+        </summary>
+        <div style="margin-top:16px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);text-align:left">
+                <th style="padding:8px">Tag</th>
+                <th style="padding:8px">Trades</th>
+                <th style="padding:8px">P&L Total</th>
+                <th style="padding:8px">P&L/Trade</th>
+                <th style="padding:8px">Win Rate</th>
+                <th style="padding:8px">RR Prom</th>
+                <th style="padding:8px">TP / SL / BE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${singleTags.map(t => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                  <td style="padding:8px;font-weight:500">${t.tag}</td>
+                  <td style="padding:8px">${t.count}</td>
+                  <td style="padding:8px;color:${t.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(t.totalPnl)}</td>
+                  <td style="padding:8px;color:${t.avgPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(t.avgPnl)}</td>
+                  <td style="padding:8px">${t.winRate}%</td>
+                  <td style="padding:8px">${t.avgRR !== null ? t.avgRR + 'R' : '—'}</td>
+                  <td style="padding:8px">${t.wins} / ${t.losses} / ${t.bes}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
+  }
+
+  // Kill Zones
+  if (killZones.length > 0) {
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          🕐 Por Kill Zone
+        </summary>
+        <div style="margin-top:16px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);text-align:left">
+                <th style="padding:8px">Kill Zone</th>
+                <th style="padding:8px">Trades</th>
+                <th style="padding:8px">P&L Total</th>
+                <th style="padding:8px">P&L/Trade</th>
+                <th style="padding:8px">Win Rate</th>
+                <th style="padding:8px">TP / SL / BE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${killZones.map(k => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                  <td style="padding:8px;font-weight:500">${k.killZone}</td>
+                  <td style="padding:8px">${k.count}</td>
+                  <td style="padding:8px;color:${k.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(k.totalPnl)}</td>
+                  <td style="padding:8px;color:${k.avgPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(k.avgPnl)}</td>
+                  <td style="padding:8px">${k.winRate}%</td>
+                  <td style="padding:8px">${k.wins} / ${k.losses} / ${k.bes}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
+  }
+
+  // SMT
+  if (smt.length === 2) {
+    const withSMT = smt.find(s => s.type === 'CON_SMT');
+    const withoutSMT = smt.find(s => s.type === 'SIN_SMT');
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          🧠 Con vs Sin SMT
+        </summary>
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="background:rgba(215,201,174,0.1);border:1px solid rgba(215,201,174,0.3);border-radius:8px;padding:16px">
+            <div style="font-weight:600;color:var(--accent)">✓ Con SMT</div>
+            <div style="margin-top:8px;font-size:0.9rem">${withSMT.count} trades · ${fmtPnl(withSMT.totalPnl)} · WR ${withSMT.winRate}% · RR ${withSMT.avgRR?.toFixed(2) || '—'}R</div>
+          </div>
+          <div style="background:rgba(100,100,100,0.1);border:1px solid rgba(100,100,100,0.3);border-radius:8px;padding:16px">
+            <div style="font-weight:600;color:var(--text-muted)">✗ Sin SMT</div>
+            <div style="margin-top:8px;font-size:0.9rem">${withoutSMT.count} trades · ${fmtPnl(withoutSMT.totalPnl)} · WR ${withoutSMT.winRate}% · RR ${withoutSMT.avgRR?.toFixed(2) || '—'}R</div>
+          </div>
+        </div>
+      </details>
+    `;
+  }
+
+  // Símbolos
+  if (symbols.length > 0) {
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          📈 Por Símbolo
+        </summary>
+        <div style="margin-top:16px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);text-align:left">
+                <th style="padding:8px">Símbolo</th>
+                <th style="padding:8px">Trades</th>
+                <th style="padding:8px">P&L Total</th>
+                <th style="padding:8px">P&L/Trade</th>
+                <th style="padding:8px">Win Rate</th>
+                <th style="padding:8px">TP / SL / BE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${symbols.map(s => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                  <td style="padding:8px;font-weight:500">${s.symbol}</td>
+                  <td style="padding:8px">${s.count}</td>
+                  <td style="padding:8px;color:${s.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(s.totalPnl)}</td>
+                  <td style="padding:8px;color:${s.avgPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(s.avgPnl)}</td>
+                  <td style="padding:8px">${s.winRate}%</td>
+                  <td style="padding:8px">${s.wins} / ${s.losses} / ${s.bes}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
+  }
+
+  // Días de la semana
+  if (daysOfWeek.length > 0) {
+    html += `
+      <details class="mode-stat-card" style="margin-bottom:24px">
+        <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+          📅 Por Día de la Semana
+        </summary>
+        <div style="margin-top:16px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);text-align:left">
+                <th style="padding:8px">Día</th>
+                <th style="padding:8px">Trades</th>
+                <th style="padding:8px">P&L Total</th>
+                <th style="padding:8px">P&L/Trade</th>
+                <th style="padding:8px">Win Rate</th>
+                <th style="padding:8px">TP / SL / BE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${daysOfWeek.map(d => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                  <td style="padding:8px;font-weight:500">${d.day}</td>
+                  <td style="padding:8px">${d.count}</td>
+                  <td style="padding:8px;color:${d.totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(d.totalPnl)}</td>
+                  <td style="padding:8px;color:${d.avgPnl >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPnl(d.avgPnl)}</td>
+                  <td style="padding:8px">${d.winRate}%</td>
+                  <td style="padding:8px">${d.wins} / ${d.losses} / ${d.bes}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
+  }
+
+  return html;
+}
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(t._timer);t._timer=setTimeout(()=>{t.classList.remove('show');},3000);}
 
 // boot is exported and called from index.html
