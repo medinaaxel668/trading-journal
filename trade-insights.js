@@ -136,7 +136,13 @@ function groupByDayOfWeek(trades) {
   const map = new Map();
   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   for (const t of trades) {
-    const d = new Date(t.date).getDay();
+    let d;
+    if (t.date.includes('T')) {
+      d = new Date(t.date).getDay();
+    } else {
+      const p = t.date.split('-');
+      d = p.length === 3 ? new Date(p[0], p[1] - 1, p[2]).getDay() : new Date(t.date).getDay();
+    }
     const key = days[d];
     if (!map.has(key)) map.set(key, { trades: [], count: 0, totalPnl: 0, wins: 0, losses: 0, bes: 0 });
     const g = map.get(key);
