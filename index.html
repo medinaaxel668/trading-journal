@@ -267,6 +267,37 @@
               <textarea class="form-input" name="aprendizaje" rows="2" placeholder="Lecciones aprendidas..."></textarea>
             </div>
           </div>
+          
+          <div style="margin-top:16px; border-top: 1px solid var(--border); padding-top:16px; padding-bottom:16px;">
+            <h4 style="margin-bottom:12px; color:var(--text-main); font-size:14px;">Vinculación & Calidad de Ejecución</h4>
+            <div class="grid-3-col">
+              <div>
+                <label class="mode-stat-label">Challenge asociado</label>
+                <select name="challengeId" class="form-select challenge-select">
+                  <option value="">Ninguno</option>
+                </select>
+              </div>
+              <div>
+                <label class="mode-stat-label">Errores cometidos</label>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <label style="color:var(--text-sec); font-size:14px;"><input type="checkbox" name="isOvertrade" value="true" /> Overtrade</label>
+                  <label style="color:var(--text-sec); font-size:14px;"><input type="checkbox" name="isRevengeTrade" value="true" /> Revenge trade</label>
+                  <label style="color:var(--text-sec); font-size:14px;"><input type="checkbox" name="isFueraDelPlan" value="true" /> Fuera de plan</label>
+                </div>
+              </div>
+              <div>
+                <label class="mode-stat-label">Error principal</label>
+                <select name="errorType" class="form-select">
+                  <option value="">Ninguno</option>
+                  <option value="entrada_mala">Entrada mala / precipitada</option>
+                  <option value="salida_anticipada">Salida anticipada</option>
+                  <option value="movi_stop">Moví stop loss</option>
+                  <option value="exceso_riesgo">Exceso de riesgo</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+            </div>
+          </div>
           <div id="trade-form-error" style="color:var(--red);margin-top:10px;"></div>
           <button type="submit" class="btn-enter-mode" style="margin-top:32px">Guardar Trade</button>
         </form>
@@ -442,7 +473,38 @@
         <textarea class="form-input" name="notes" rows="3"></textarea>
       </div>
 
-      <div id="edit-form-error" style="color:var(--red);margin-top:10px;"></div>
+      
+          <div style="margin-top:16px; border-top: 1px solid var(--border); padding-top:16px; padding-bottom:16px;">
+            <h4 style="margin-bottom:12px; color:var(--text-main); font-size:14px;">Vinculación & Calidad de Ejecución</h4>
+            <div class="grid-3-col">
+              <div>
+                <label class="mode-stat-label">Challenge asociado</label>
+                <select name="challengeId" class="form-select challenge-select">
+                  <option value="">Ninguno</option>
+                </select>
+              </div>
+              <div>
+                <label class="mode-stat-label">Errores cometidos</label>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <label style="color:var(--text-sec); font-size:14px;"><input type="checkbox" name="isOvertrade" value="true" /> Overtrade</label>
+                  <label style="color:var(--text-sec); font-size:14px;"><input type="checkbox" name="isRevengeTrade" value="true" /> Revenge trade</label>
+                  <label style="color:var(--text-sec); font-size:14px;"><input type="checkbox" name="isFueraDelPlan" value="true" /> Fuera de plan</label>
+                </div>
+              </div>
+              <div>
+                <label class="mode-stat-label">Error principal</label>
+                <select name="errorType" class="form-select">
+                  <option value="">Ninguno</option>
+                  <option value="entrada_mala">Entrada mala / precipitada</option>
+                  <option value="salida_anticipada">Salida anticipada</option>
+                  <option value="movi_stop">Moví stop loss</option>
+                  <option value="exceso_riesgo">Exceso de riesgo</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="edit-form-error" style="color:var(--red);margin-top:10px;"></div>
       <button type="button" id="modal-save" class="btn-enter-mode" style="margin-top:24px">Actualizar</button>
       <button type="button" id="modal-cancel" class="tab-btn" style="width:100%;margin-top:12px">Cancelar</button>
     </form>

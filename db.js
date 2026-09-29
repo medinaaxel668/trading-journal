@@ -31,9 +31,17 @@ export async function initDB() {
 
   // ── Schema completo: incluye liveTrades y liveNotes ──────────────────────────
   db.version(4).stores({
-    trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName]',
+    trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName],challengeId',
     notes:      'id,date,createdAt',
-    liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt',
+    liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,challengeId',
+    liveNotes:  'id,date,createdAt',
+    challenges: 'id,type,firma,status,createdAt,fechaInicioExamen'
+  });
+  
+  db.version(5).stores({
+    trades:     'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName],challengeId',
+    notes:      'id,date,createdAt',
+    liveTrades: 'id,date,strategyName,symbol,killZone,side,result,smt,tags,createdAt,challengeId',
     liveNotes:  'id,date,createdAt',
     challenges: 'id,type,firma,status,createdAt,fechaInicioExamen'
   });
@@ -81,6 +89,12 @@ export async function addTrade(data) {
     result:       String(data.result).trim().toUpperCase(),
     beOutcome:    data.result === 'BE' ? (String(data.beOutcome || '').trim() || null) : null,
     smt:          Boolean(data.smt) || false,
+    
+    challengeId:  String(data.challengeId || '').trim() || null,
+    isOvertrade:  Boolean(data.isOvertrade) || false,
+    isRevengeTrade: Boolean(data.isRevengeTrade) || false,
+    isFueraDelPlan: Boolean(data.isFueraDelPlan) || false,
+    errorType:    String(data.errorType || '').trim() || null,
     pnl:          Number(data.pnl),
     rrPlanned:    data.rrPlanned !== '' && data.rrPlanned !== undefined ? Number(data.rrPlanned) : null,
     tradingViewUrl: String(data.tradingViewUrl || '').trim(),
@@ -108,6 +122,12 @@ export async function updateTrade(id, data) {
     result:       String(data.result).trim().toUpperCase(),
     beOutcome:    data.result === 'BE' ? (String(data.beOutcome || '').trim() || null) : null,
     smt:          Boolean(data.smt) || false,
+    
+    challengeId:  String(data.challengeId || '').trim() || null,
+    isOvertrade:  Boolean(data.isOvertrade) || false,
+    isRevengeTrade: Boolean(data.isRevengeTrade) || false,
+    isFueraDelPlan: Boolean(data.isFueraDelPlan) || false,
+    errorType:    String(data.errorType || '').trim() || null,
     pnl:          Number(data.pnl),
     rrPlanned:    data.rrPlanned !== '' && data.rrPlanned !== undefined ? Number(data.rrPlanned) : null,
     tradingViewUrl: String(data.tradingViewUrl || '').trim(),
@@ -159,6 +179,12 @@ export async function addLiveTrade(data) {
     result:       String(data.result).trim().toUpperCase(),
     beOutcome:    data.result === 'BE' ? (String(data.beOutcome || '').trim() || null) : null,
     smt:          Boolean(data.smt) || false,
+    
+    challengeId:  String(data.challengeId || '').trim() || null,
+    isOvertrade:  Boolean(data.isOvertrade) || false,
+    isRevengeTrade: Boolean(data.isRevengeTrade) || false,
+    isFueraDelPlan: Boolean(data.isFueraDelPlan) || false,
+    errorType:    String(data.errorType || '').trim() || null,
     pnl:          Number(data.pnl),
     rrPlanned:    data.rrPlanned !== '' && data.rrPlanned !== undefined ? Number(data.rrPlanned) : null,
     tradingViewUrl: String(data.tradingViewUrl || '').trim(),
@@ -188,6 +214,12 @@ export async function updateLiveTrade(id, data) {
     result:       String(data.result).trim().toUpperCase(),
     beOutcome:    data.result === 'BE' ? (String(data.beOutcome || '').trim() || null) : null,
     smt:          Boolean(data.smt) || false,
+    
+    challengeId:  String(data.challengeId || '').trim() || null,
+    isOvertrade:  Boolean(data.isOvertrade) || false,
+    isRevengeTrade: Boolean(data.isRevengeTrade) || false,
+    isFueraDelPlan: Boolean(data.isFueraDelPlan) || false,
+    errorType:    String(data.errorType || '').trim() || null,
     pnl:          Number(data.pnl),
     rrPlanned:    data.rrPlanned !== '' && data.rrPlanned !== undefined ? Number(data.rrPlanned) : null,
     tradingViewUrl: String(data.tradingViewUrl || '').trim(),

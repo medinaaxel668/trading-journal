@@ -352,7 +352,7 @@ function renderModeStats() {
   setEl('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
   renderModePreviews(bt, live);
   // Challenge stats
- getAllChallenges().then(challenges => {
+ import('./challenge.js').then(m => m.getAllChallenges()).then(challenges => {
   const m = computeChallengeMetrics(challenges);
   setEl('ms-ch-count', m.total);
   setEl('mc-ch-count', m.total);
@@ -864,6 +864,8 @@ function collectTradeForm(formId) {
   const f=document.getElementById(formId);
   const v=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.value:'';};
   const r=name=>{const el=f.querySelector(`[name="${name}"]:checked`);return el?el.value:'';};
+  const c=name=>{const el=f.querySelector(`[name="${name}"]`);return el?el.checked:false;};
+  
   
   let tags = [];
   if (formId === 'trade-form') {

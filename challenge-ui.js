@@ -223,11 +223,11 @@ function renderChallengeForm(container) {
               <div><label class="mode-stat-label">Profit retiro ($)</label><input name="profitRetiro" class="form-input" type="number" value="0" /></div>
               <div><label class="mode-stat-label">DD examen ($)</label><input name="drawdownExamen" class="form-input" type="number" value="0" /></div>
               <div><label class="mode-stat-label">DD retiro ($)</label><input name="drawdownRetiro" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="0" /></div>
+              <div style="display:none"><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="0" /></div>
+              <div style="display:none"><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="0" /></div>
+              <div style="display:none"><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="0" /></div>
+              <div style="display:none"><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="0" /></div>
+              <div style="display:none"><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="0" /></div>
               <div><label class="mode-stat-label">RR promedio</label><input name="rrPromedio" class="form-input" type="number" step="0.1" value="0" /></div>
             </div>
           </div>

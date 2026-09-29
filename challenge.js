@@ -27,9 +27,29 @@ function uuid() {
 
 function nowISO() { return new Date().toISOString(); }
 
+
 export async function getAllChallenges() {
-  return db.challenges.orderBy('createdAt').reverse().toArray();
+  const challenges = await db.challenges.orderBy('createdAt').reverse().toArray();
+  const allTrades = await db.trades.toArray();
+  const allLiveTrades = await db.liveTrades.toArray();
+  const all = [...allTrades, ...allLiveTrades];
+  
+  for (const c of challenges) {
+    const linked = all.filter(t => t.challengeId === c.id);
+    c.tradesTotales = linked.length;
+    c.overtrades = linked.filter(t => t.isOvertrade).length;
+    c.revengeTrades = linked.filter(t => t.isRevengeTrade).length;
+    c.tradesFueraDelPlan = linked.filter(t => t.isFueraDelPlan).length;
+    c.profitCalculado = linked.reduce((sum, t) => sum + (Number(t.pnl) || 0), 0);
+    const decisive = linked.filter(t => t.result === 'TP' || t.result === 'SL');
+    const wins = decisive.filter(t => t.result === 'TP');
+    c.winrate = decisive.length > 0 ? (wins.length / decisive.length) * 100 : 0;
+    const rrs = linked.filter(t => t.rrPlanned).map(t => t.rrPlanned);
+    c.rrPromedio = rrs.length > 0 ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0;
+  }
+  return challenges;
 }
+
 
 export async function addChallenge(data) {
   const challenge = {
