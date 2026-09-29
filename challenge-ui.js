@@ -182,63 +182,87 @@ function renderFunnelBar(label, value, max, color) {
 }
 
 // ── FORMULARIO (igual que antes) ─────────────────────────────────────────────
+// Escapa texto para usarlo dentro de atributos HTML o textarea.
+function escAttr(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function renderChallengeForm(container) {
   const today = new Date().toISOString().split('T')[0];
+  // Si estamos editando, buscar el challenge para precargar sus datos en el form.
+  // Si el id ya no existe (p. ej. se borró en otro dispositivo), volver a modo alta.
+  let editing = null;
+  if (challengeState.editingId) {
+    editing = challengeState.challenges.find(c => String(c.id) === String(challengeState.editingId)) || null;
+    if (!editing) challengeState.editingId = null;
+  }
+  const isEdit = !!editing;
+  const numVal = (v, fallback) => (v ?? fallback);
+  const sel = (opt, cur) => String(opt) === String(cur) ? 'selected' : '';
+  // Firmas: si la guardada no está en la lista base, agregarla para no perderla.
+  const firmasBase = ['Alpha Capital', 'Funding Pips', 'FTMO', 'Apex', 'The Funded Trader'];
+  const firmas = (editing?.firma && !firmasBase.includes(editing.firma))
+    ? [editing.firma, ...firmasBase]
+    : firmasBase;
   container.innerHTML = `
     <section class="tab-section active">
       <div class="mode-stat-card" style="text-align:left">
-        <h2 style="margin-bottom:24px">${challengeState.editingId ? 'Editar Challenge' : 'Registrar Nuevo Challenge'}</h2>
+        <h2 style="margin-bottom:24px">${isEdit ? `Editar Challenge${editing.firma ? ` — ${escAttr(editing.firma)}` : ''}` : 'Registrar Nuevo Challenge'}</h2>
         <form id="challenge-form">
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Configuración</div>
             <div class="grid-2-col">
-              <div><label class="mode-stat-label">Tipo</label><select name="type" class="form-select"><option value="simulado">Simulado (FX Replay)</option><option value="real">Real (Firma)</option></select></div>
-              <div><label class="mode-stat-label">Nombre del Challenge (opcional)</label><input name="nombre" class="form-input" type="text" placeholder="Ej: Fase 1 FTMO" /></div>
-              <div><label class="mode-stat-label">Firma</label><select name="firma" class="form-select"><option>Alpha Capital</option><option>Funding Pips</option><option>FTMO</option><option>Apex</option><option>The Funded Trader</option></select></div>
-              <div><label class="mode-stat-label">Tamaño de cuenta ($)</label><input name="cuentaSize" class="form-input" type="number" value="50000" /></div>
-              <div><label class="mode-stat-label">Costo ($)</label><input name="costo" class="form-input" type="number" value="100" /></div>
+              <div><label class="mode-stat-label">Tipo</label><select name="type" class="form-select"><option value="simulado" ${sel('simulado', editing?.type ?? 'simulado')}>Simulado (FX Replay)</option><option value="real" ${sel('real', editing?.type)}>Real (Firma)</option></select></div>
+              <div><label class="mode-stat-label">Nombre del Challenge (opcional)</label><input name="nombre" class="form-input" type="text" placeholder="Ej: Fase 1 FTMO" value="${escAttr(editing?.nombre)}" /></div>
+              <div><label class="mode-stat-label">Firma</label><select name="firma" class="form-select">${firmas.map(f => `<option ${sel(f, editing?.firma ?? 'Alpha Capital')}>${escAttr(f)}</option>`).join('')}</select></div>
+              <div><label class="mode-stat-label">Tamaño de cuenta ($)</label><input name="cuentaSize" class="form-input" type="number" value="${numVal(editing?.cuentaSize, 50000)}" /></div>
+              <div><label class="mode-stat-label">Costo ($)</label><input name="costo" class="form-input" type="number" value="${numVal(editing?.costo, 100)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Objetivos</div>
             <div class="grid-3-col">
-              <div><label class="mode-stat-label">Target examen ($)</label><input name="profitTargetExamen" class="form-input" type="number" value="3000" /></div>
-              <div><label class="mode-stat-label">Target retiro ($)</label><input name="profitTargetRetiro" class="form-input" type="number" value="1000" /></div>
-              <div><label class="mode-stat-label">Payout (%)</label><input name="payoutPercent" class="form-input" type="number" value="50" /></div>
+              <div><label class="mode-stat-label">Target examen ($)</label><input name="profitTargetExamen" class="form-input" type="number" value="${numVal(editing?.profitTargetExamen, 3000)}" /></div>
+              <div><label class="mode-stat-label">Target retiro ($)</label><input name="profitTargetRetiro" class="form-input" type="number" value="${numVal(editing?.profitTargetRetiro, 1000)}" /></div>
+              <div><label class="mode-stat-label">Payout (%)</label><input name="payoutPercent" class="form-input" type="number" value="${numVal(editing?.payoutPercent, 50)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Fechas y Estado</div>
             <div class="grid-2-col">
-              <div><label class="mode-stat-label">Estado</label><select name="status" class="form-select"><option value="en_examen">En examen</option><option value="pasado">Pasado</option><option value="en_retiro">En fase retiro</option><option value="retiro_logrado">Retiro logrado</option><option value="perdido">Perdido</option><option value="retiro_fallido">Retiro fallido</option></select></div>
-              <div><label class="mode-stat-label">Fecha inicio examen</label><input name="fechaInicioExamen" class="form-input" type="date" value="${today}" required /></div>
-              <div><label class="mode-stat-label">Fecha fin examen</label><input name="fechaFinExamen" class="form-input" type="date" /></div>
-              <div><label class="mode-stat-label">Fecha inicio retiro</label><input name="fechaInicioRetiro" class="form-input" type="date" /></div>
-              <div><label class="mode-stat-label">Fecha fin retiro</label><input name="fechaFinRetiro" class="form-input" type="date" /></div>
+              <div><label class="mode-stat-label">Estado</label><select name="status" class="form-select"><option value="en_examen" ${sel('en_examen', editing?.status ?? 'en_examen')}>En examen</option><option value="pasado" ${sel('pasado', editing?.status)}>Pasado</option><option value="en_retiro" ${sel('en_retiro', editing?.status)}>En fase retiro</option><option value="retiro_logrado" ${sel('retiro_logrado', editing?.status)}>Retiro logrado</option><option value="perdido" ${sel('perdido', editing?.status)}>Perdido</option><option value="retiro_fallido" ${sel('retiro_fallido', editing?.status)}>Retiro fallido</option></select></div>
+              <div><label class="mode-stat-label">Fecha inicio examen</label><input name="fechaInicioExamen" class="form-input" type="date" value="${escAttr(editing?.fechaInicioExamen || today)}" required /></div>
+              <div><label class="mode-stat-label">Fecha fin examen</label><input name="fechaFinExamen" class="form-input" type="date" value="${escAttr(editing?.fechaFinExamen)}" /></div>
+              <div><label class="mode-stat-label">Fecha inicio retiro</label><input name="fechaInicioRetiro" class="form-input" type="date" value="${escAttr(editing?.fechaInicioRetiro)}" /></div>
+              <div><label class="mode-stat-label">Fecha fin retiro</label><input name="fechaFinRetiro" class="form-input" type="date" value="${escAttr(editing?.fechaFinRetiro)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Métricas Operativas</div>
             <div class="grid-3-col">
-              <div><label class="mode-stat-label">Profit examen ($)</label><input name="profitExamen" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">Profit retiro ($)</label><input name="profitRetiro" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">DD examen ($)</label><input name="drawdownExamen" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">DD retiro ($)</label><input name="drawdownRetiro" class="form-input" type="number" value="0" /></div>
-              <div style="display:none"><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="0" /></div>
-              <div style="display:none"><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="0" /></div>
-              <div style="display:none"><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="0" /></div>
-              <div style="display:none"><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="0" /></div>
-              <div style="display:none"><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="0" /></div>
-              <div><label class="mode-stat-label">RR promedio</label><input name="rrPromedio" class="form-input" type="number" step="0.1" value="0" /></div>
+              <div><label class="mode-stat-label">Profit examen ($)</label><input name="profitExamen" class="form-input" type="number" value="${numVal(editing?.profitExamen, 0)}" /></div>
+              <div><label class="mode-stat-label">Profit retiro ($)</label><input name="profitRetiro" class="form-input" type="number" value="${numVal(editing?.profitRetiro, 0)}" /></div>
+              <div><label class="mode-stat-label">DD examen ($)</label><input name="drawdownExamen" class="form-input" type="number" value="${numVal(editing?.drawdownExamen, 0)}" /></div>
+              <div><label class="mode-stat-label">DD retiro ($)</label><input name="drawdownRetiro" class="form-input" type="number" value="${numVal(editing?.drawdownRetiro, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="${numVal(editing?.tradesTotales, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="${numVal(editing?.tradesFueraDelPlan, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="${numVal(editing?.overtrades, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="${numVal(editing?.revengeTrades, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="${numVal(editing?.winrate, 0)}" /></div>
+              <div><label class="mode-stat-label">RR promedio</label><input name="rrPromedio" class="form-input" type="number" step="0.1" value="${numVal(editing?.rrPromedio, 0)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px">
             <label class="mode-stat-label">Notas / Aprendizaje</label>
-            <textarea name="notas" class="form-input" rows="3" placeholder="¿Qué aprendiste? ¿Qué mejorarías?"></textarea>
+            <textarea name="notas" class="form-input" rows="3" placeholder="¿Qué aprendiste? ¿Qué mejorarías?">${escAttr(editing?.notas)}</textarea>
           </div>
           <div id="challenge-form-error" style="color:var(--red);margin-bottom:10px"></div>
-          <button type="submit" class="btn-enter-mode">${challengeState.editingId ? 'Actualizar Challenge' : 'Registrar Challenge'}</button>
-          ${challengeState.editingId ? '<button type="button" id="ch-cancel-edit" class="tab-btn" style="width:100%;margin-top:12px">Cancelar edición</button>' : ''}
+          <button type="submit" class="btn-enter-mode">${isEdit ? 'Actualizar Challenge' : 'Registrar Challenge'}</button>
+          ${isEdit ? '<button type="button" id="ch-cancel-edit" class="tab-btn" style="width:100%;margin-top:12px">Cancelar edición</button>' : ''}
         </form>
       </div>
     </section>
