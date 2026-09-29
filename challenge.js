@@ -54,6 +54,7 @@ export async function getAllChallenges() {
 export async function addChallenge(data) {
   const challenge = {
     id: uuid(),
+    nombre: String(data.nombre || '').trim(),
     type: String(data.type || 'simulado').trim(),
     firma: String(data.firma || '').trim(),
     cuentaSize: Number(data.cuentaSize) || 50000,
@@ -92,6 +93,7 @@ export async function updateChallenge(id, data) {
   if (!existing) throw new Error('Challenge no encontrado');
   const updated = {
     ...existing,
+    nombre: String(data.nombre || existing.nombre).trim(),
     type: String(data.type || existing.type).trim(),
     firma: String(data.firma || existing.firma).trim(),
     cuentaSize: Number(data.cuentaSize ?? existing.cuentaSize),

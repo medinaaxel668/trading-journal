@@ -193,6 +193,7 @@ function renderChallengeForm(container) {
             <div class="mode-stat-label" style="margin-bottom:12px">Configuración</div>
             <div class="grid-2-col">
               <div><label class="mode-stat-label">Tipo</label><select name="type" class="form-select"><option value="simulado">Simulado (FX Replay)</option><option value="real">Real (Firma)</option></select></div>
+              <div><label class="mode-stat-label">Nombre del Challenge (opcional)</label><input name="nombre" class="form-input" type="text" placeholder="Ej: Fase 1 FTMO" /></div>
               <div><label class="mode-stat-label">Firma</label><select name="firma" class="form-select"><option>Alpha Capital</option><option>Funding Pips</option><option>FTMO</option><option>Apex</option><option>The Funded Trader</option></select></div>
               <div><label class="mode-stat-label">Tamaño de cuenta ($)</label><input name="cuentaSize" class="form-input" type="number" value="50000" /></div>
               <div><label class="mode-stat-label">Costo ($)</label><input name="costo" class="form-input" type="number" value="100" /></div>
