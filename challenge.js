@@ -43,7 +43,14 @@ export async function getAllChallenges() {
     c.profitCalculado = linked.reduce((sum, t) => sum + (Number(t.pnl) || 0), 0);
     const decisive = linked.filter(t => t.result === 'TP' || t.result === 'SL');
     const wins = decisive.filter(t => t.result === 'TP');
+    const losses = decisive.filter(t => t.result === 'SL');
     c.winrate = decisive.length > 0 ? (wins.length / decisive.length) * 100 : 0;
+    c.ganados = wins.length;
+    c.perdidos = losses.length;
+    const bes = linked.filter(t => t.result === 'BE');
+    c.beTotal = bes.length;
+    c.beHaciaTP = bes.filter(t => t.beOutcome === 'TP').length;
+    c.beHaciaSL = bes.filter(t => t.beOutcome === 'SL').length;
     const rrs = linked.filter(t => t.rrPlanned).map(t => t.rrPlanned);
     c.rrPromedio = rrs.length > 0 ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0;
   }
@@ -64,6 +71,8 @@ export async function addChallenge(data) {
     payoutPercent: Number(data.payoutPercent) || 50,
     payoutAmount: (Number(data.profitTargetRetiro) || 1000) * ((Number(data.payoutPercent) || 50) / 100),
     status: String(data.status || 'en_examen').trim(),
+    fase: ['examen', 'fondeado'].includes(String(data.fase)) ? String(data.fase) : 'examen',
+    continuaA: String(data.continuaA || '').trim() || null,
     fechaInicioExamen: String(data.fechaInicioExamen || '').trim(),
     fechaFinExamen: String(data.fechaFinExamen || '').trim(),
     fechaInicioRetiro: String(data.fechaInicioRetiro || '').trim(),
@@ -103,6 +112,8 @@ export async function updateChallenge(id, data) {
     payoutPercent: Number(data.payoutPercent ?? existing.payoutPercent),
     payoutAmount: (Number(data.profitTargetRetiro ?? existing.profitTargetRetiro)) * ((Number(data.payoutPercent ?? existing.payoutPercent)) / 100),
     status: String(data.status || existing.status).trim(),
+    fase: ['examen', 'fondeado'].includes(String(data.fase)) ? String(data.fase) : (existing.fase || 'examen'),
+    continuaA: data.continuaA !== undefined ? (String(data.continuaA).trim() || null) : (existing.continuaA ?? null),
     fechaInicioExamen: String(data.fechaInicioExamen ?? existing.fechaInicioExamen).trim(),
     fechaFinExamen: String(data.fechaFinExamen ?? existing.fechaFinExamen).trim(),
     fechaInicioRetiro: String(data.fechaInicioRetiro ?? existing.fechaInicioRetiro).trim(),

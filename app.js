@@ -43,6 +43,10 @@ const state = {
   bound: false // flag para evitar listeners duplicados
 };
 
+// Mapa challengeId -> nombre visible ("Challenge: Lucid 1" en el historial).
+// Se carga en renderAll junto con los selects; buildTradeCard lo usa si ya está listo.
+let challengeNameById = {};
+
 // ── BOOT ─────────────────────────────────────────────────────────────────────
 export async function boot() {
   await initDB();
@@ -588,6 +592,15 @@ function renderAll() {
       ).join('');
       sel.value = current;
     });
+    // Mapa id -> nombre para la línea "Challenge: ..." del historial de trades.
+    const prevCount = Object.keys(challengeNameById).length;
+    challengeNameById = {};
+    challenges.forEach(c => { challengeNameById[String(c.id)] = c.nombre || c.firma || 'Challenge'; });
+    // renderHistory corre antes de que este promise resuelva: re-renderizar una vez
+    // para que las líneas de challenge aparezcan sin esperar a la próxima navegación.
+    if (Object.keys(challengeNameById).length !== prevCount && document.getElementById('trade-list')) {
+      renderHistory();
+    }
   }).catch(()=>{});
 }
 
@@ -970,6 +983,8 @@ function buildTradeCard(t) {
     ? `<span class="badge badge-be" style="font-size:.65rem">BE→${t.beOutcome}</span>` : '';
   const smtTag = t.smt ? `<span class="badge" style="font-size:.65rem;background:rgba(100,200,255,.15);color:#64c8ff;border:1px solid rgba(100,200,255,.3)">SMT</span>` : '';
   const tagsHtml = (t.tags || []).map(tag => `<span class="badge" style="font-size:.65rem;background:rgba(255,255,255,0.05);color:var(--text-muted);border:1px solid var(--border)">${esc(tag)}</span>`).join(' ');
+  const chName = t.challengeId ? challengeNameById[String(t.challengeId)] : null;
+  const chLine = chName ? `<div style="font-size:.75rem;color:var(--text-muted);margin-top:6px">Challenge: <span style="color:var(--text-sec);font-weight:600">${esc(chName)}</span></div>` : '';
   
   return `
   <div class="trade-item">
@@ -988,6 +1003,7 @@ function buildTradeCard(t) {
       <span>⏰ ${esc(t.killZone)}</span>
       ${t.rrPlanned?`<span>📐 RR ${t.rrPlanned}</span>`:''}
     </div>
+    ${chLine}
     ${links?`<div class="trade-links">${links}</div>`:''}
     <div class="trade-actions">
       <button class="btn btn-detail" data-id="${t.id}">Ver detalle</button>
@@ -1005,6 +1021,10 @@ function bindDetailModal() {
 
 function openDetailModal(id) {
   const t=state.trades.find(x=>x.id===id); if(!t)return;
+  const chName = t.challengeId ? challengeNameById[String(t.challengeId)] : null;
+  const chRow = chName
+    ? `<div class="detail-row"><span class="detail-row-label">Challenge</span><span class="detail-row-value">${esc(chName)}</span></div>`
+    : '';
   const modeLabel=state.mode==='live'
     ?'<span class="badge badge-mode-live">Live</span>'
     :'<span class="badge badge-mode-bt">Backtest</span>';
@@ -1036,6 +1056,7 @@ function openDetailModal(id) {
     <div class="detail-row"><span class="detail-row-label">Resultado</span><span class="detail-row-value">${t.result}</span></div>
     <div class="detail-row"><span class="detail-row-label">SMT</span><span class="detail-row-value">${t.smt?'✅ Sí':'—'}</span></div>
     <div class="detail-row"><span class="detail-row-label">Etiquetas</span><span class="detail-row-value">${(t.tags||[]).join(', ')||'—'}</span></div>
+    ${chRow}
     ${beOutcomeRow}
     ${liveSection}
     ${links?`<div class="detail-section">Referencias</div><div class="detail-links">${links}</div>`:''}`;
