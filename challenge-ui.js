@@ -11,6 +11,8 @@ const challengeState = {
   filterType: 'todos',
   filterFirma: 'Todas',
   editingId: null,
+  // Prefill para "Crear fase fondeada": valores por defecto sin entrar en modo edición.
+  prefill: null,
 };
 
 export async function initChallenge() {
@@ -191,6 +193,52 @@ function escAttr(s) {
     .replace(/"/g, '&quot;');
 }
 
+// ── FASES (examen / fondeado) ────────────────────────────────────────────────
+// La fase es un tipo estático del registro; el estado (en_examen, pasado, …) sigue
+// siendo dinámico. Los challenges viejos sin fase se muestran como Examen.
+export function faseOf(c) {
+  return c && c.fase === 'fondeado' ? 'fondeado' : 'examen';
+}
+export function faseLabel(fase) {
+  return fase === 'fondeado' ? 'Fondeado' : 'Examen';
+}
+export function fasePillHtml(c) {
+  const fase = faseOf(c);
+  const style = fase === 'fondeado'
+    ? 'background:rgba(255,193,7,.15);color:#ffca28;border:1px solid rgba(255,193,7,.3)'
+    : 'background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)';
+  return `<span style="font-size:.7rem;padding:2px 8px;border-radius:4px;${style}">${fase === 'fondeado' ? '💰 Fondeado' : '📝 Examen'}</span>`;
+}
+export function parentChallenge(c, challenges) {
+  if (!c || !c.continuaA) return null;
+  return (challenges || []).find(p => String(p.id) === String(c.continuaA)) || null;
+}
+export function continuaLineHtml(c, challenges) {
+  if (!c || !c.continuaA) return '';
+  const p = parentChallenge(c, challenges);
+  const name = p ? (p.nombre || p.firma || '—') : '(registro eliminado)';
+  const fl = p ? faseLabel(faseOf(p)) : '—';
+  return `<div style="font-size:.8rem;color:var(--text-muted);margin:2px 0 6px">↳ continuación de <strong>${escAttr(name)}</strong> (${fl})</div>`;
+}
+// Solo un examen con estado "pasado" puede generar su fase fondeada.
+export function canCreateFundedPhase(c) {
+  return !!c && faseOf(c) === 'examen' && c.status === 'pasado';
+}
+// Valores precargados al crear la fase fondeada desde un examen pasado.
+export function buildFundedPrefill(src) {
+  if (!src) return null;
+  return {
+    nombre: src.nombre || '',
+    type: src.type || 'simulado',
+    firma: src.firma || '',
+    cuentaSize: src.cuentaSize ?? 50000,
+    profitTargetRetiro: src.profitTargetRetiro ?? 1000,
+    payoutPercent: src.payoutPercent ?? 50,
+    fase: 'fondeado',
+    continuaA: src.id || '',
+  };
+}
+
 function renderChallengeForm(container) {
   const today = new Date().toISOString().split('T')[0];
   // Si estamos editando, buscar el challenge para precargar sus datos en el form.
@@ -200,65 +248,80 @@ function renderChallengeForm(container) {
     editing = challengeState.challenges.find(c => String(c.id) === String(challengeState.editingId)) || null;
     if (!editing) challengeState.editingId = null;
   }
+  // Prefill: valores por defecto al crear una fase fondeada (no es edición).
+  const prefill = !editing ? (challengeState.prefill || null) : null;
+  // src unifica edición y prefill para los valores por defecto del formulario.
+  const src = editing || prefill || {};
   const isEdit = !!editing;
   const numVal = (v, fallback) => (v ?? fallback);
   const sel = (opt, cur) => String(opt) === String(cur) ? 'selected' : '';
   // Firmas: si la guardada no está en la lista base, agregarla para no perderla.
   const firmasBase = ['Alpha Capital', 'Funding Pips', 'FTMO', 'Apex', 'The Funded Trader'];
-  const firmas = (editing?.firma && !firmasBase.includes(editing.firma))
-    ? [editing.firma, ...firmasBase]
+  const firmas = (src.firma && !firmasBase.includes(src.firma))
+    ? [src.firma, ...firmasBase]
     : firmasBase;
+  // Opciones de "Es continuación de": todos los challenges salvo el que se edita.
+  const continuaOpts = challengeState.challenges.filter(c => !editing || String(c.id) !== String(editing.id));
+  const prefillParent = prefill?.continuaA
+    ? challengeState.challenges.find(c => String(c.id) === String(prefill.continuaA))
+    : null;
+  const formTitle = isEdit
+    ? `Editar Challenge${src.firma ? ` — ${escAttr(src.firma)}` : ''}`
+    : (prefill ? 'Registrar Fase Fondeada' : 'Registrar Nuevo Challenge');
   container.innerHTML = `
     <section class="tab-section active">
       <div class="mode-stat-card" style="text-align:left">
-        <h2 style="margin-bottom:24px">${isEdit ? `Editar Challenge${editing.firma ? ` — ${escAttr(editing.firma)}` : ''}` : 'Registrar Nuevo Challenge'}</h2>
+        <h2 style="margin-bottom:24px">${formTitle}</h2>
+        ${(!isEdit && prefill) ? `<div style="margin-bottom:16px;font-size:.85rem;color:var(--text-muted)">↳ Precargado desde el examen <strong>${escAttr(prefillParent?.nombre || prefillParent?.firma || '')}</strong><button type="button" id="ch-clear-prefill" class="tab-btn" style="padding:2px 10px;font-size:.75rem;margin-left:8px">empezar de cero</button></div>` : ''}
         <form id="challenge-form">
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Configuración</div>
             <div class="grid-2-col">
-              <div><label class="mode-stat-label">Tipo</label><select name="type" class="form-select"><option value="simulado" ${sel('simulado', editing?.type ?? 'simulado')}>Simulado (FX Replay)</option><option value="real" ${sel('real', editing?.type)}>Real (Firma)</option></select></div>
-              <div><label class="mode-stat-label">Nombre del Challenge (opcional)</label><input name="nombre" class="form-input" type="text" placeholder="Ej: Fase 1 FTMO" value="${escAttr(editing?.nombre)}" /></div>
-              <div><label class="mode-stat-label">Firma</label><select name="firma" class="form-select">${firmas.map(f => `<option ${sel(f, editing?.firma ?? 'Alpha Capital')}>${escAttr(f)}</option>`).join('')}</select></div>
-              <div><label class="mode-stat-label">Tamaño de cuenta ($)</label><input name="cuentaSize" class="form-input" type="number" value="${numVal(editing?.cuentaSize, 50000)}" /></div>
-              <div><label class="mode-stat-label">Costo ($)</label><input name="costo" class="form-input" type="number" value="${numVal(editing?.costo, 100)}" /></div>
+              <div><label class="mode-stat-label">Tipo</label><select name="type" class="form-select"><option value="simulado" ${sel('simulado', src.type ?? 'simulado')}>Simulado (FX Replay)</option><option value="real" ${sel('real', src.type)}>Real (Firma)</option></select></div>
+              <div><label class="mode-stat-label">Nombre del Challenge (opcional)</label><input name="nombre" class="form-input" type="text" placeholder="Ej: Fase 1 FTMO" value="${escAttr(src.nombre)}" /></div>
+              <div><label class="mode-stat-label">Firma</label><select name="firma" class="form-select">${firmas.map(f => `<option ${sel(f, src.firma ?? 'Alpha Capital')}>${escAttr(f)}</option>`).join('')}</select></div>
+              <div><label class="mode-stat-label">Tamaño de cuenta ($)</label><input name="cuentaSize" class="form-input" type="number" value="${numVal(src.cuentaSize, 50000)}" /></div>
+              <div><label class="mode-stat-label">Costo ($)</label><input name="costo" class="form-input" type="number" value="${numVal(src.costo, 100)}" /></div>
+              <div><label class="mode-stat-label">Fase</label><select name="fase" class="form-select"><option value="examen" ${sel('examen', src.fase ?? 'examen')}>📝 Examen</option><option value="fondeado" ${sel('fondeado', src.fase)}>💰 Fondeado</option></select></div>
+              <div><label class="mode-stat-label">Es continuación de</label><select name="continuaA" class="form-select"><option value="">— Ninguno —</option>${continuaOpts.map(c => `<option value="${c.id}" ${sel(c.id, src.continuaA ?? '')}>${escAttr(c.nombre || c.firma)} (${faseLabel(faseOf(c))})</option>`).join('')}</select></div>
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Objetivos</div>
             <div class="grid-3-col">
-              <div><label class="mode-stat-label">Target examen ($)</label><input name="profitTargetExamen" class="form-input" type="number" value="${numVal(editing?.profitTargetExamen, 3000)}" /></div>
-              <div><label class="mode-stat-label">Target retiro ($)</label><input name="profitTargetRetiro" class="form-input" type="number" value="${numVal(editing?.profitTargetRetiro, 1000)}" /></div>
-              <div><label class="mode-stat-label">Payout (%)</label><input name="payoutPercent" class="form-input" type="number" value="${numVal(editing?.payoutPercent, 50)}" /></div>
+              <div><label class="mode-stat-label">Target examen ($)</label><input name="profitTargetExamen" class="form-input" type="number" value="${numVal(src.profitTargetExamen, 3000)}" /></div>
+              <div><label class="mode-stat-label">Target retiro ($)</label><input name="profitTargetRetiro" class="form-input" type="number" value="${numVal(src.profitTargetRetiro, 1000)}" /></div>
+              <div><label class="mode-stat-label">Payout (%)</label><input name="payoutPercent" class="form-input" type="number" value="${numVal(src.payoutPercent, 50)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Fechas y Estado</div>
             <div class="grid-2-col">
-              <div><label class="mode-stat-label">Estado</label><select name="status" class="form-select"><option value="en_examen" ${sel('en_examen', editing?.status ?? 'en_examen')}>En examen</option><option value="pasado" ${sel('pasado', editing?.status)}>Pasado</option><option value="en_retiro" ${sel('en_retiro', editing?.status)}>En fase retiro</option><option value="retiro_logrado" ${sel('retiro_logrado', editing?.status)}>Retiro logrado</option><option value="perdido" ${sel('perdido', editing?.status)}>Perdido</option><option value="retiro_fallido" ${sel('retiro_fallido', editing?.status)}>Retiro fallido</option></select></div>
-              <div><label class="mode-stat-label">Fecha inicio examen</label><input name="fechaInicioExamen" class="form-input" type="date" value="${escAttr(editing?.fechaInicioExamen || today)}" required /></div>
-              <div><label class="mode-stat-label">Fecha fin examen</label><input name="fechaFinExamen" class="form-input" type="date" value="${escAttr(editing?.fechaFinExamen)}" /></div>
-              <div><label class="mode-stat-label">Fecha inicio retiro</label><input name="fechaInicioRetiro" class="form-input" type="date" value="${escAttr(editing?.fechaInicioRetiro)}" /></div>
-              <div><label class="mode-stat-label">Fecha fin retiro</label><input name="fechaFinRetiro" class="form-input" type="date" value="${escAttr(editing?.fechaFinRetiro)}" /></div>
+              <div><label class="mode-stat-label">Estado</label><select name="status" class="form-select"><option value="en_examen" ${sel('en_examen', src.status ?? 'en_examen')}>En examen</option><option value="pasado" ${sel('pasado', src.status)}>Pasado</option><option value="en_retiro" ${sel('en_retiro', src.status)}>En fase retiro</option><option value="retiro_logrado" ${sel('retiro_logrado', src.status)}>Retiro logrado</option><option value="perdido" ${sel('perdido', src.status)}>Perdido</option><option value="retiro_fallido" ${sel('retiro_fallido', src.status)}>Retiro fallido</option></select></div>
+              <div><label class="mode-stat-label">Fecha inicio examen</label><input name="fechaInicioExamen" class="form-input" type="date" value="${escAttr(src.fechaInicioExamen || today)}" required /></div>
+              <div><label class="mode-stat-label">Fecha fin examen</label><input name="fechaFinExamen" class="form-input" type="date" value="${escAttr(src.fechaFinExamen)}" /></div>
+              <div><label class="mode-stat-label">Fecha inicio retiro</label><input name="fechaInicioRetiro" class="form-input" type="date" value="${escAttr(src.fechaInicioRetiro)}" /></div>
+              <div><label class="mode-stat-label">Fecha fin retiro</label><input name="fechaFinRetiro" class="form-input" type="date" value="${escAttr(src.fechaFinRetiro)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
             <div class="mode-stat-label" style="margin-bottom:12px">Métricas Operativas</div>
             <div class="grid-3-col">
-              <div><label class="mode-stat-label">Profit examen ($)</label><input name="profitExamen" class="form-input" type="number" value="${numVal(editing?.profitExamen, 0)}" /></div>
-              <div><label class="mode-stat-label">Profit retiro ($)</label><input name="profitRetiro" class="form-input" type="number" value="${numVal(editing?.profitRetiro, 0)}" /></div>
-              <div><label class="mode-stat-label">DD examen ($)</label><input name="drawdownExamen" class="form-input" type="number" value="${numVal(editing?.drawdownExamen, 0)}" /></div>
-              <div><label class="mode-stat-label">DD retiro ($)</label><input name="drawdownRetiro" class="form-input" type="number" value="${numVal(editing?.drawdownRetiro, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="${numVal(editing?.tradesTotales, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="${numVal(editing?.tradesFueraDelPlan, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="${numVal(editing?.overtrades, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="${numVal(editing?.revengeTrades, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="${numVal(editing?.winrate, 0)}" /></div>
-              <div><label class="mode-stat-label">RR promedio</label><input name="rrPromedio" class="form-input" type="number" step="0.1" value="${numVal(editing?.rrPromedio, 0)}" /></div>
+              <div><label class="mode-stat-label">Profit examen ($)</label><input name="profitExamen" class="form-input" type="number" value="${numVal(src.profitExamen, 0)}" /></div>
+              <div><label class="mode-stat-label">Profit retiro ($)</label><input name="profitRetiro" class="form-input" type="number" value="${numVal(src.profitRetiro, 0)}" /></div>
+              <div><label class="mode-stat-label">DD examen ($)</label><input name="drawdownExamen" class="form-input" type="number" value="${numVal(src.drawdownExamen, 0)}" /></div>
+              <div><label class="mode-stat-label">DD retiro ($)</label><input name="drawdownRetiro" class="form-input" type="number" value="${numVal(src.drawdownRetiro, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="${numVal(src.tradesTotales, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="${numVal(src.tradesFueraDelPlan, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="${numVal(src.overtrades, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="${numVal(src.revengeTrades, 0)}" /></div>
+              <div style="display:none"><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="${numVal(src.winrate, 0)}" /></div>
+              <div><label class="mode-stat-label">RR promedio</label><input name="rrPromedio" class="form-input" type="number" step="0.1" value="${numVal(src.rrPromedio, 0)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px">
             <label class="mode-stat-label">Notas / Aprendizaje</label>
-            <textarea name="notas" class="form-input" rows="3" placeholder="¿Qué aprendiste? ¿Qué mejorarías?">${escAttr(editing?.notas)}</textarea>
+            <textarea name="notas" class="form-input" rows="3" placeholder="¿Qué aprendiste? ¿Qué mejorarías?">${escAttr(src.notas)}</textarea>
           </div>
           <div id="challenge-form-error" style="color:var(--red);margin-bottom:10px"></div>
           <button type="submit" class="btn-enter-mode">${isEdit ? 'Actualizar Challenge' : 'Registrar Challenge'}</button>
@@ -281,6 +344,7 @@ function renderChallengeForm(container) {
         await addChallenge(data);
         showToast('Challenge registrado', 'success');
       }
+      challengeState.prefill = null;
       form.reset();
       await loadChallenges();
       challengeState.currentTab = 'historial';
@@ -291,6 +355,10 @@ function renderChallengeForm(container) {
   });
   document.getElementById('ch-cancel-edit')?.addEventListener('click', () => {
     challengeState.editingId = null;
+    renderChallengeForm(container);
+  });
+  document.getElementById('ch-clear-prefill')?.addEventListener('click', () => {
+    challengeState.prefill = null;
     renderChallengeForm(container);
   });
 }
@@ -333,22 +401,28 @@ function renderChallengeHistory(container) {
                 <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;${c.type === 'simulado' ? 'background:rgba(59,130,246,.15);color:#60a5fa' : 'background:rgba(156,39,176,.15);color:#ce93d8'}">
                   ${c.type === 'simulado' ? '🎮 Sim' : '💰 Real'}
                 </span>
+                ${fasePillHtml(c)}
                 <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;${statusColors[c.status]}">
                   ${statusLabels[c.status]}
                 </span>
               </div>
               <span class="trade-pnl ${profitTotal >= 0 ? 'positive' : 'negative'}">$${profitTotal.toLocaleString()}</span>
             </div>
+            ${continuaLineHtml(c, challengeState.challenges)}
             <div class="trade-meta">
               <span>📅 ${c.fechaInicioExamen || '—'}</span>
               <span>⏱️ ${diasExamen} días examen</span>
               <span>📊 ${c.tradesTotales} trades</span>
+              <span>✅ ${c.ganados ?? 0} ganados</span>
+              <span>❌ ${c.perdidos ?? 0} perdidos</span>
+              <span>⚖️ Breakeven: ${c.beTotal ?? 0} (${c.beHaciaTP ?? 0} - ${c.beHaciaSL ?? 0})</span>
               <span>🎯 Disciplina: ${disciplina}%</span>
               <span>💹 WR: ${c.winrate}%</span>
             </div>
             <div class="trade-actions">
               <button class="btn btn-edit" data-ch-id="${c.id}">Editar</button>
               <button class="btn btn-delete" data-ch-del-id="${c.id}">Borrar</button>
+              ${canCreateFundedPhase(c) ? `<button class="btn" data-ch-fund-id="${c.id}">＋ Crear fase fondeada</button>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -358,6 +432,18 @@ function renderChallengeHistory(container) {
   container.querySelectorAll('[data-ch-id]').forEach(btn => {
     btn.addEventListener('click', () => {
       challengeState.editingId = btn.dataset.chId;
+      challengeState.prefill = null;
+      challengeState.currentTab = 'registrar';
+      document.querySelector('[data-challenge-tab="registrar"]')?.click();
+    });
+  });
+  container.querySelectorAll('[data-ch-fund-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const src = challengeState.challenges.find(c => String(c.id) === String(btn.dataset.chFundId));
+      const prefill = buildFundedPrefill(src);
+      if (!prefill) return;
+      challengeState.editingId = null;
+      challengeState.prefill = prefill;
       challengeState.currentTab = 'registrar';
       document.querySelector('[data-challenge-tab="registrar"]')?.click();
     });
