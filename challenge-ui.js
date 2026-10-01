@@ -305,18 +305,13 @@ function renderChallengeForm(container) {
             </div>
           </div>
           <div style="margin-bottom:20px;padding:16px;background:var(--bg-input);border-radius:var(--radius)">
-            <div class="mode-stat-label" style="margin-bottom:12px">Métricas Operativas</div>
-            <div class="grid-3-col">
+            <div class="mode-stat-label" style="margin-bottom:12px">Profit y Drawdown</div>
+            <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px">📊 Los trades, ganados, perdidos, breakeven, winrate, RR y errores se calculan automáticamente de los trades vinculados en Backtesting o Live.</div>
+            <div class="grid-2-col">
               <div><label class="mode-stat-label">Profit examen ($)</label><input name="profitExamen" class="form-input" type="number" value="${numVal(src.profitExamen, 0)}" /></div>
               <div><label class="mode-stat-label">Profit retiro ($)</label><input name="profitRetiro" class="form-input" type="number" value="${numVal(src.profitRetiro, 0)}" /></div>
               <div><label class="mode-stat-label">DD examen ($)</label><input name="drawdownExamen" class="form-input" type="number" value="${numVal(src.drawdownExamen, 0)}" /></div>
               <div><label class="mode-stat-label">DD retiro ($)</label><input name="drawdownRetiro" class="form-input" type="number" value="${numVal(src.drawdownRetiro, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Trades totales</label><input name="tradesTotales" class="form-input" type="number" value="${numVal(src.tradesTotales, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Trades fuera del plan</label><input name="tradesFueraDelPlan" class="form-input" type="number" value="${numVal(src.tradesFueraDelPlan, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Overtrades</label><input name="overtrades" class="form-input" type="number" value="${numVal(src.overtrades, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Revenge trades</label><input name="revengeTrades" class="form-input" type="number" value="${numVal(src.revengeTrades, 0)}" /></div>
-              <div style="display:none"><label class="mode-stat-label">Winrate (%)</label><input name="winrate" class="form-input" type="number" value="${numVal(src.winrate, 0)}" /></div>
-              <div><label class="mode-stat-label">RR promedio</label><input name="rrPromedio" class="form-input" type="number" step="0.1" value="${numVal(src.rrPromedio, 0)}" /></div>
             </div>
           </div>
           <div style="margin-bottom:20px">

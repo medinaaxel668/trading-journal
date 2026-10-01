@@ -46,6 +46,9 @@ const state = {
 // Mapa challengeId -> nombre visible ("Challenge: Lucid 1" en el historial).
 // Se carga en renderAll junto con los selects; buildTradeCard lo usa si ya está listo.
 let challengeNameById = {};
+// Firma del mapa (ids + nombres) para re-renderizar el historial cuando cambie
+// (no solo cuando cambia la cantidad de challenges).
+let challengeMapSig = '';
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
 export async function boot() {
@@ -593,12 +596,15 @@ function renderAll() {
       sel.value = current;
     });
     // Mapa id -> nombre para la línea "Challenge: ..." del historial de trades.
-    const prevCount = Object.keys(challengeNameById).length;
+    const prevSig = challengeMapSig;
     challengeNameById = {};
     challenges.forEach(c => { challengeNameById[String(c.id)] = c.nombre || c.firma || 'Challenge'; });
+    challengeMapSig = challenges.map(c => `${c.id}:${c.nombre || c.firma || ''}`).join('|');
     // renderHistory corre antes de que este promise resuelva: re-renderizar una vez
     // para que las líneas de challenge aparezcan sin esperar a la próxima navegación.
-    if (Object.keys(challengeNameById).length !== prevCount && document.getElementById('trade-list')) {
+    // Se compara la firma (ids + nombres) y no solo la cantidad, así la etiqueta
+    // también se actualiza si se renombra un challenge.
+    if (challengeMapSig !== prevSig && document.getElementById('trade-list')) {
       renderHistory();
     }
   }).catch(()=>{});
@@ -908,6 +914,11 @@ function collectTradeForm(formId) {
     tags, date:v('date'), symbol:v('symbol')||collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS),
     killZone:v('killZone'),side:r('side'),result:r('result'),
     beOutcome:r('beOutcome'),smt:smtVal==='true',
+    // Vinculación a challenge y calidad de ejecución (el form los tiene, pero
+    // antes no se leían acá y el challengeId nunca llegaba a guardarse).
+    challengeId:v('challengeId'),
+    isOvertrade:c('isOvertrade'),isRevengeTrade:c('isRevengeTrade'),isFueraDelPlan:c('isFueraDelPlan'),
+    errorType:v('errorType'),
     pnl:v('pnl'),rrPlanned:v('rrPlanned'),tradingViewUrl:v('tradingViewUrl'),
     imageM3Url:v('imageM3Url'),imageM15Url:v('imageM15Url'),
     notes:v('notes'),setup:v('setup'),fomo:v('fomo'),aprendizaje:v('aprendizaje')
@@ -1111,6 +1122,25 @@ function openEditModal(id) {
   set('tags', (t.tags||[]).join(', '));
   renderTagCloud('edit-tag-cloud', 'edit-tags-input');
   set('tradingViewUrl',t.tradingViewUrl);set('imageM3Url',t.imageM3Url);set('imageM15Url',t.imageM15Url);
+  // Vinculación a challenge y calidad de ejecución
+  const chSel = f.querySelector('[name="challengeId"]');
+  if (chSel) {
+    const wantCh = t.challengeId || '';
+    // Si las opciones aún no se poblaron (carga asíncrona en renderAll),
+    // agregar una opción temporal para no perder el valor al precargar.
+    if (wantCh && ![...chSel.options].some(o => o.value === wantCh)) {
+      const tmp = document.createElement('option');
+      tmp.value = wantCh;
+      tmp.textContent = challengeNameById[String(wantCh)] || 'Challenge';
+      chSel.appendChild(tmp);
+    }
+    chSel.value = wantCh;
+  }
+  const setCheck = (name, val) => { const el = f.querySelector(`[name="${name}"]`); if (el) el.checked = !!val; };
+  setCheck('isOvertrade', t.isOvertrade);
+  setCheck('isRevengeTrade', t.isRevengeTrade);
+  setCheck('isFueraDelPlan', t.isFueraDelPlan);
+  set('errorType', t.errorType || '');
   // BE outcome
   const beSection=document.getElementById('edit-be-outcome-section');
   if(t.result==='BE'){beSection.style.display='block';setRadio('beOutcome',t.beOutcome||'');}
