@@ -173,6 +173,16 @@
         <div class="card-label" style="text-align:left;margin-bottom:16px;">Trades Recientes</div>
         <div id="recent-trades" style="text-align:left;"></div>
       </div>
+      <div class="mode-stat-card" style="margin-top:24px;padding:32px;text-align:left">
+        <div class="card-label" style="text-align:left;margin-bottom:8px;">✈️ Modo viaje sin internet</div>
+        <p style="color:var(--text-muted);font-size:.85rem;margin:0 0 12px">Descarga las imágenes de entrada (M1), M3 y M15 de todos tus trades (backtest y live) para verlas sin conexión.</p>
+        <button type="button" id="btn-prepare-offline" class="btn-enter-mode" style="width:auto;padding:10px 20px">📥 Preparar imágenes para el viaje</button>
+        <div id="offline-progress" style="margin-top:12px;display:none">
+          <div class="progress-track"><div id="offline-progress-bar" class="progress-bar"></div></div>
+          <div id="offline-progress-txt" style="font-size:.8rem;color:var(--text-muted);margin-top:6px"></div>
+        </div>
+        <div id="offline-status" style="margin-top:12px;font-size:.85rem"></div>
+      </div>
     </section>
 
     <!-- ADD TRADE -->

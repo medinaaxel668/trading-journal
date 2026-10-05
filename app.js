@@ -578,6 +578,7 @@ async function loadData() {
 
 function renderAll() {
   renderDashboard();
+  renderOfflineCard();
   renderHistory();
   renderAnalytics();
   renderNotes();
@@ -979,17 +980,14 @@ function renderHistory() {
     return;
   }
   container.innerHTML=trades.map(t=>buildTradeCard(t)).join('');
+  bindImageLightboxButtons(container);
   container.querySelectorAll('.btn-edit').forEach(btn=>btn.addEventListener('click',()=>openEditModal(btn.dataset.id)));
   container.querySelectorAll('.btn-delete').forEach(btn=>btn.addEventListener('click',()=>confirmDelete(btn.dataset.id)));
   container.querySelectorAll('.btn-detail').forEach(btn=>btn.addEventListener('click',()=>openDetailModal(btn.dataset.id)));
 }
 
 function buildTradeCard(t) {
-  const links=[
-    t.imageM3Url?`<a href="${esc(t.imageM3Url)}" target="_blank" rel="noopener">Imagen M3</a>`:'',
-    t.imageM15Url?`<a href="${esc(t.imageM15Url)}" target="_blank" rel="noopener">Imagen M15</a>`:'',
-    t.tradingViewUrl?`<a href="${esc(t.tradingViewUrl)}" target="_blank" rel="noopener">TradingView</a>`:''
-  ].filter(Boolean).join('');
+  const links=tradeImageButtons(t);
   const beTag = t.result==='BE'&&t.beOutcome
     ? `<span class="badge badge-be" style="font-size:.65rem">BE→${t.beOutcome}</span>` : '';
   const smtTag = t.smt ? `<span class="badge" style="font-size:.65rem;background:rgba(100,200,255,.15);color:#64c8ff;border:1px solid rgba(100,200,255,.3)">SMT</span>` : '';
@@ -1041,11 +1039,7 @@ function openDetailModal(id) {
     :'<span class="badge badge-mode-bt">Backtest</span>';
   document.getElementById('detail-modal-title').innerHTML=
     `${esc(t.strategyName)} ${modeLabel} <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span> <span class="badge ${badgeResult(t.result)}">${t.result}</span>`;
-  const links=[
-    t.imageM3Url?`<a class="detail-link" href="${esc(t.imageM3Url)}" target="_blank" rel="noopener">Imagen M3</a>`:'',
-    t.imageM15Url?`<a class="detail-link" href="${esc(t.imageM15Url)}" target="_blank" rel="noopener">Imagen M15</a>`:'',
-    t.tradingViewUrl?`<a class="detail-link" href="${esc(t.tradingViewUrl)}" target="_blank" rel="noopener">TradingView</a>`:''
-  ].filter(Boolean).join('');
+  const links=tradeImageButtons(t,'detail-link');
   const beOutcomeRow = t.result==='BE'&&t.beOutcome
     ?`<div class="detail-row"><span class="detail-row-label">Continuó a</span><span class="detail-row-value">${t.beOutcome==='TP'?'✅ TP':'❌ SL'}</span></div>` : '';
   const liveSection=state.mode==='live'?`
@@ -1071,6 +1065,7 @@ function openDetailModal(id) {
     ${beOutcomeRow}
     ${liveSection}
     ${links?`<div class="detail-section">Referencias</div><div class="detail-links">${links}</div>`:''}`;
+  bindImageLightboxButtons(document.getElementById('detail-modal-body'));
   document.getElementById('detail-modal').classList.add('open');
 }
 
@@ -1959,5 +1954,198 @@ function buildInsightsHTML(data) {
   return html;
 }
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(t._timer);t._timer=setTimeout(()=>{t.classList.remove('show');},3000);}
+
+// ── MODO OFFLINE / VIAJE ─────────────────────────────────────────────────────
+// Las imágenes de los trades son links externos (TradingView / FXReplay). Para
+// verlas sin internet hay que descargarlas al caché antes del viaje con
+// "Preparar viaje offline". El service worker las sirve desde la caché
+// dedicada 'trading-journal-images-v1' (sobrevive a updates de la app).
+
+const IMG_CACHE_NAME = 'trading-journal-images-v1';
+// Las 3 imágenes del formulario: entrada (gralmente M1), M3 y M15.
+const IMAGE_FIELDS = [
+  { key: 'tradingViewUrl', label: 'Entrada (M1)' },
+  { key: 'imageM3Url',     label: 'M3' },
+  { key: 'imageM15Url',    label: 'M15' },
+];
+
+// Convierte links de página a imagen directa cuando se conoce el patrón:
+// - tradingview.com/x/[ID] -> s3.tradingview.com/snapshots/[letra]/[ID].png
+// - URLs que ya son imágenes directas (fxr-snapshots, s3.tradingview.com, ...)
+//   se devuelven tal cual.
+function resolveImageUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return null;
+  const m = u.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
+  if (m) {
+    const id = m[1];
+    return `https://s3.tradingview.com/snapshots/${id[0].toLowerCase()}/${id}.png`;
+  }
+  return u;
+}
+
+// Junta las 3 imágenes de cada trade, sin duplicados por URL resuelta.
+function collectTradeImageEntries(trades) {
+  const seen = new Set();
+  const out = [];
+  (trades || []).forEach(t => {
+    IMAGE_FIELDS.forEach(f => {
+      const raw = t ? t[f.key] : '';
+      const resolved = resolveImageUrl(raw);
+      if (!resolved || seen.has(resolved)) return;
+      seen.add(resolved);
+      out.push({ tradeId: t && t.id, label: f.label, raw: String(raw).trim(), resolved });
+    });
+  });
+  return out;
+}
+
+// Botones que abren la imagen en el visor interno (funciona offline vía caché).
+function tradeImageButtons(t, extraClass) {
+  const cls = extraClass ? `img-open-btn ${extraClass}` : 'img-open-btn';
+  return IMAGE_FIELDS
+    .map(f => t[f.key]
+      ? `<button type="button" class="${cls}" data-raw="${esc(t[f.key])}" data-label="${esc(f.label)}">📷 ${esc(f.label)}</button>`
+      : '')
+    .filter(Boolean).join('');
+}
+
+function ensureLightbox() {
+  let lb = document.getElementById('img-lightbox');
+  if (lb) return lb;
+  lb = document.createElement('div');
+  lb.id = 'img-lightbox';
+  lb.className = 'img-lightbox';
+  lb.innerHTML = `
+    <div class="img-lightbox-backdrop" data-lb-close></div>
+    <div class="img-lightbox-content">
+      <div class="img-lightbox-head">
+        <span id="img-lightbox-label"></span>
+        <button type="button" class="img-lightbox-close" data-lb-close aria-label="Cerrar">✕</button>
+      </div>
+      <img id="img-lightbox-img" alt="Imagen del trade" />
+      <div class="img-lightbox-foot"><a id="img-lightbox-orig" href="#" target="_blank" rel="noopener">abrir original ↗</a></div>
+    </div>`;
+  document.body.appendChild(lb);
+  lb.querySelectorAll('[data-lb-close]').forEach(el => el.addEventListener('click', closeImageLightbox));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeImageLightbox(); });
+  return lb;
+}
+
+function openImageLightbox(rawUrl, label) {
+  const resolved = resolveImageUrl(rawUrl);
+  if (!resolved) return;
+  const lb = ensureLightbox();
+  document.getElementById('img-lightbox-label').textContent = label || 'Imagen';
+  document.getElementById('img-lightbox-img').src = resolved;
+  document.getElementById('img-lightbox-orig').href = rawUrl;
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImageLightbox() {
+  const lb = document.getElementById('img-lightbox');
+  if (lb) lb.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function bindImageLightboxButtons(root) {
+  (root || document).querySelectorAll('.img-open-btn').forEach(btn => {
+    if (btn._lbBound) return;
+    btn._lbBound = true;
+    btn.addEventListener('click', () => openImageLightbox(btn.dataset.raw, btn.dataset.label));
+  });
+}
+
+function offlineManifest() {
+  try { return JSON.parse(localStorage.getItem('tj_offline_manifest') || 'null'); }
+  catch (e) { return null; }
+}
+
+function saveOfflineManifest(m) {
+  try { localStorage.setItem('tj_offline_manifest', JSON.stringify(m)); } catch (e) {}
+}
+
+// Descarga una imagen para el caché. Intenta CORS para detectar 404s;
+// si el host no manda headers CORS (típico en S3), reintenta opaco,
+// que igual sirve para mostrar en <img>.
+async function fetchImageForCache(url) {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (res.ok) return res;
+    return null;
+  } catch (e) {
+    try { return await fetch(url, { mode: 'no-cors' }); }
+    catch (e2) { return null; }
+  }
+}
+
+async function prepareOfflineImages() {
+  const btn = document.getElementById('btn-prepare-offline');
+  const wrap = document.getElementById('offline-progress');
+  const bar = document.getElementById('offline-progress-bar');
+  const txt = document.getElementById('offline-progress-txt');
+  const setProgress = (done, total, msg) => {
+    if (wrap) wrap.style.display = 'block';
+    if (bar) bar.style.width = total > 0 ? Math.round((done / total) * 100) + '%' : '0%';
+    if (txt) txt.textContent = msg || '';
+  };
+  if (btn) btn.disabled = true;
+  try {
+    if (!('caches' in window)) throw new Error('este navegador no soporta caché offline');
+    const bt = await getAllTrades().catch(() => []);
+    const live = await getAllLiveTrades().catch(() => []);
+    const entries = collectTradeImageEntries([...bt, ...live]);
+    if (entries.length === 0) {
+      setProgress(0, 0, 'no hay imágenes para descargar');
+      return;
+    }
+    const cache = await caches.open(IMG_CACHE_NAME);
+    let ok = 0, fail = 0;
+    const CONC = 4;
+    for (let i = 0; i < entries.length; i += CONC) {
+      const batch = entries.slice(i, i + CONC);
+      const results = await Promise.all(batch.map(async (e) => {
+        const res = await fetchImageForCache(e.resolved);
+        if (!res) return false;
+        try { await cache.put(e.resolved, res); return true; }
+        catch (err) { return false; }
+      }));
+      results.forEach(r => { if (r) ok++; else fail++; });
+      setProgress(ok + fail, entries.length, `descargando ${ok + fail}/${entries.length}…`);
+    }
+    saveOfflineManifest({ date: new Date().toISOString(), total: entries.length, ok, fail });
+    renderOfflineCard();
+    setProgress(entries.length, entries.length,
+      fail === 0 ? `listo: ${ok} imágenes descargadas` : `listo: ${ok} descargadas, ${fail} fallaron`);
+    showToast(fail === 0 ? `${ok} imágenes listas para el viaje` : `${ok} listas, ${fail} fallaron`,
+      fail === 0 ? 'success' : 'error');
+  } catch (err) {
+    setProgress(0, 0, '');
+    showToast(err.message || 'no se pudo preparar el offline', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderOfflineCard() {
+  const box = document.getElementById('offline-status');
+  const btn = document.getElementById('btn-prepare-offline');
+  if (btn && !btn._offBound) {
+    btn._offBound = true;
+    btn.addEventListener('click', prepareOfflineImages);
+  }
+  if (!box) return;
+  const m = offlineManifest();
+  if (!m) {
+    box.textContent = 'todavía no descargaste las imágenes. hacelo con wifi antes del viaje.';
+    return;
+  }
+  const d = new Date(m.date);
+  const fecha = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' +
+    d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  box.innerHTML = `✅ <strong>${m.ok}</strong> imágenes listas para ver sin internet ` +
+    `<span style="color:var(--text-muted)">(preparado el ${fecha}${m.fail ? ` · ${m.fail} fallaron` : ''})</span>`;
+}
 
 // boot is exported and called from index.html
