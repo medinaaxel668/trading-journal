@@ -1,5 +1,14 @@
-import Dexie from 'https://esm.sh/dexie';
-import dexieCloud from 'https://esm.sh/dexie-cloud-addon';
+// ── IMPORTS PINNEADOS ─────────────────────────────────────────────────────────
+// El 2026-10-19 la app dejó de arrancar con:
+//   "Two different versions of Dexie loaded in the same app: 4.4.7 and 4.4.6"
+// Causa: 'https://esm.sh/dexie' sin versión fija resolvía a 4.4.7 mientras el
+// addon por dentro traía 4.4.6 (la caché del CDN resolvía distinto cada URL).
+// El especificador de Dexie de abajo es EXACTAMENTE el mismo que usa el addon
+// por dentro (ver el shim de https://esm.sh/dexie-cloud-addon), así el navegador
+// carga una sola copia del módulo, siempre, sin importar qué versión resuelva el
+// rango. NO volver a imports de esm.sh sin versión.
+import Dexie from 'https://esm.sh/dexie@^4.4.5?target=es2022';
+import dexieCloud from 'https://esm.sh/dexie-cloud-addon@4.4.15';
 const DB_NAME  = 'tradingAppDB';
 const CLOUD_URL = 'https://zo8mhffzq.dexie.cloud';
 
