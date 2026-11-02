@@ -330,7 +330,7 @@ header {
 .negative { color: var(--red); }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .tag-chip-wrap { display: inline-flex; align-items: stretch; }
-.tag-chip { background: var(--bg-input); border: 1px solid var(--border); padding: 5px 12px; border-radius: 15px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
+.tag-chip { background: var(--bg-input); border: 1px solid var(--border); color: var(--text); font-family: inherit; padding: 5px 12px; border-radius: 15px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
 .tag-chip:hover { border-color: var(--accent); }
 .tag-chip.active { background: var(--accent); color: var(--bg-deep); }
 .tag-chip-wrap .tag-chip { border-radius: 15px 0 0 15px; }
