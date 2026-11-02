@@ -371,7 +371,7 @@ function renderModeStats() {
     try {
       let syncedOnce = false;
       db.cloud.syncState.subscribe(s => {
-        const badge = document.getElementById('mode-sync-badge'); if(!badge)return;
+        const badge = document.getElementById('mode-sync-status'); if(!badge)return;
         const ui = syncPhaseMap(s&&s.phase);
         badge.textContent=ui.text; badge.className='sync-badge '+ui.cls; badge.title=ui.text;
         // Si la sincronización acaba de completar, recargar datos automáticamente
@@ -1557,8 +1557,10 @@ function bindCloudUI(){
   if(!db||!db.cloud){
     const loginBtn=document.getElementById('btn-cloud-login');
     const syncBadge=document.getElementById('sync-status');
+    const homeBadge=document.getElementById('mode-sync-status');
     if(loginBtn)loginBtn.style.display='none';
     if(syncBadge)syncBadge.textContent='Solo local';
+    if(homeBadge)homeBadge.textContent='Solo local';
     return;
   }
   try{db.cloud.syncState.subscribe(s=>{
@@ -1585,15 +1587,23 @@ function syncPhaseMap(phase){
 }
 
 function updateSyncBadge(phase) {
-  const badge = document.getElementById('sync-status');
-  if (!badge) return;
   const ui = syncPhaseMap(phase);
-  const inApp = document.getElementById('app-screen')?.style.display !== 'none';
-  // En pantalla de inicio (mode-screen): mostrar texto
-  // En app: mostrar solo emoji
-  badge.textContent = inApp ? ui.emoji : ui.text;
-  badge.className = 'sync-badge ' + ui.cls;
-  badge.title = ui.text;
+  const badge = document.getElementById('sync-status');
+  if (badge) {
+    const inApp = document.getElementById('app-screen')?.style.display !== 'none';
+    // En pantalla de inicio (mode-screen): mostrar texto
+    // En app: mostrar solo emoji
+    badge.textContent = inApp ? ui.emoji : ui.text;
+    badge.className = 'sync-badge ' + ui.cls;
+    badge.title = ui.text;
+  }
+  // Badge de la pantalla de inicio (home): siempre con texto
+  const homeBadge = document.getElementById('mode-sync-status');
+  if (homeBadge) {
+    homeBadge.textContent = ui.text;
+    homeBadge.className = 'sync-badge ' + ui.cls;
+    homeBadge.title = ui.text;
+  }
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
