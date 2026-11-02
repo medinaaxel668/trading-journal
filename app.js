@@ -7,7 +7,8 @@ import {
   getAllNotes, addNote, deleteNote,
   getAllLiveNotes, addLiveNote, deleteLiveNote,
   getAllStrategies, addStrategy as dbAddStrategy, getAllStrategyTags,
-  addStrategyTag, renameStrategyTag, deleteStrategyTag
+  addStrategyTag, renameStrategyTag, deleteStrategyTag,
+  LOOSE_TAGS_ID, renameLooseTag, deleteLooseTag, assignLooseTag, setTagsOrder
 } from './db.js';
 import { enterChallengeMode, restoreOriginalTabs } from './challenge-ui.js';
 import { getAllChallenges, computeChallengeMetrics } from './challenge.js';
@@ -503,27 +504,26 @@ function renderTagCloud(containerId, inputId) {
   const strategyId = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
   const getCurrentTags = () => input.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
 
-  // Sin estrategia elegida: se muestran las etiquetas usadas en este modo
-  // (como antes del rediseño), solo para tildar. La gestión por estrategia
-  // (lista propia, menú •••, amarillas) aparece al elegir una estrategia.
+  // Alcance de la lista: la estrategia elegida, o las etiquetas SUELTAS
+  // (sin estrategia) cuando no hay ninguna seleccionada. Las sueltas ahora
+  // también tienen registro propio: menú ••• y orden, igual que las demás.
   const noStrategy = !strategyId;
+  const scopeId = strategyId || LOOSE_TAGS_ID;
   const current = getCurrentTags();
-  const active = noStrategy
-    ? [...new Set([...current, ...state.trades.flatMap(t => (t.tags || []).map(x => String(x).toUpperCase()))])].sort()
-    : activeTagNames(strategyId);
-  // Etiquetas que el trade ya tiene pero ya no están en la lista activa de la
-  // estrategia (eliminadas): se muestran en amarillo, "a revisar".
-  const orphan = noStrategy ? [] : current.filter(t => !active.some(a => a.toUpperCase() === t));
+  const active = noStrategy ? looseTagNames(current) : orderedTagNames(strategyId);
+  // Etiquetas que el trade ya tiene pero ya no están en la lista activa
+  // (eliminadas o asignadas a otra lista): se muestran en amarillo, "a revisar".
+  const orphan = current.filter(t => !active.some(a => a.toUpperCase() === t));
 
   const chipHTML = (tag, isOrphan) => {
     const isActive = current.includes(tag.toUpperCase());
     return `<span class="tag-chip-wrap">
-      <button type="button" class="tag-chip ${isActive ? 'active' : ''} ${isOrphan ? 'tag-orphan' : ''}" data-tag="${esc(tag)}"${isOrphan ? ' title="Etiqueta fuera de la lista de la estrategia — a revisar"' : ''}>${esc(tag)}</button>
-      ${noStrategy ? '' : `<button type="button" class="tag-chip-menu" data-tag="${esc(tag)}" title="Editar o eliminar etiqueta" aria-label="Opciones de la etiqueta ${esc(tag)}">•••</button>`}
+      <button type="button" class="tag-chip ${isActive ? 'active' : ''} ${isOrphan ? 'tag-orphan' : ''} ${isOrphan ? '' : 'draggable'}" data-tag="${esc(tag)}"${isOrphan ? ' title="Etiqueta fuera de la lista — a revisar"' : ' title="Arrastrar para reordenar"'}>${isOrphan ? '' : '<span class="tag-grip" aria-hidden="true">⠿</span>'}${esc(tag)}</button>
+      <button type="button" class="tag-chip-menu" data-tag="${esc(tag)}" title="Opciones de la etiqueta" aria-label="Opciones de la etiqueta ${esc(tag)}">•••</button>
     </span>`;
   };
 
-  let html = (noStrategy ? '<div class="picker-hint" style="width:100%">Sin estrategia elegida: se ven las etiquetas de siempre. Si elegís una estrategia, la lista pasa a ser solo la de esa estrategia.</div>' : '')
+  let html = (noStrategy ? '<div class="picker-hint" style="width:100%">Sin estrategia elegida: estas son las etiquetas que no están asignadas a ninguna estrategia. Con el ••• las editás, las asignás a una estrategia o las eliminás de la lista; arrastrá un chip para cambiar el orden.</div>' : '')
     + active.map(tag => chipHTML(tag, false)).join('')
     + orphan.map(tag => chipHTML(tag, true)).join('');
 
@@ -540,6 +540,7 @@ function renderTagCloud(containerId, inputId) {
 
   container.querySelectorAll('.tag-chip:not(.btn-add-tag-variant)').forEach(btn => {
     btn.onclick = () => {
+      if (tagDragSuppressClick) { tagDragSuppressClick = false; return; }
       let tags = getCurrentTags();
       const tag = btn.dataset.tag.toUpperCase();
       if (tags.includes(tag)) {
@@ -550,6 +551,7 @@ function renderTagCloud(containerId, inputId) {
       input.value = tags.join(', ');
       renderTagCloud(containerId, inputId);
     };
+    if (btn.classList.contains('draggable')) attachTagDrag(btn, containerId, inputId, scopeId);
   });
 
   container.querySelectorAll('.tag-chip-menu').forEach(btn => {
@@ -567,7 +569,10 @@ function renderTagCloud(containerId, inputId) {
     const cleanTag = (addInput?.value || '').trim().toUpperCase();
     if (!cleanTag) return;
     if (noStrategy) {
-      // Sin estrategia: la etiqueta solo se tilda en este trade.
+      // Sin estrategia: la etiqueta entra en la lista de sueltas (registro
+      // propio) y queda tildada en este trade.
+      await addStrategyTag(LOOSE_TAGS_ID, cleanTag);
+      await loadStrategies();
       const cur = getCurrentTags();
       if (!cur.includes(cleanTag)) input.value = [...cur, cleanTag].join(', ');
       renderTagCloud(containerId, inputId);
@@ -592,9 +597,89 @@ function renderTagCloud(containerId, inputId) {
   if (addSubmit) addSubmit.onclick = addTag;
 }
 
-// Menú ••• de una etiqueta: Editar (renombra en TODOS los trades de la
-// estrategia, solo dentro de ella) / Eliminar (sale de la lista; los trades
-// que la tienen la conservan y pasa a verse en amarillo).
+// ── Reordenar etiquetas arrastrando ─────────────────────────────────────────
+// Se mantiene presionado un chip y se lo suelta entre dos etiquetas de la
+// misma lista; un hueco punteado marca dónde va a quedar. El orden se guarda
+// en el registro (setTagsOrder) y vale igual en backtesting y en live.
+let tagDrag = null;
+let tagDragSuppressClick = false;
+
+function attachTagDrag(btn, containerId, inputId, scopeId) {
+  btn.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const wrap = btn.closest('.tag-chip-wrap');
+    const container = document.getElementById(containerId);
+    if (!wrap || !container) return;
+    const rect = wrap.getBoundingClientRect();
+    tagDrag = { name: btn.dataset.tag, wrap, container, containerId, inputId, scopeId,
+      startX: e.clientX, startY: e.clientY,
+      offX: e.clientX - rect.left, offY: e.clientY - rect.top,
+      w: rect.width, h: rect.height, active: false };
+    document.addEventListener('pointermove', onTagDragMove);
+    document.addEventListener('pointerup', onTagDragUp, { once: true });
+    document.addEventListener('pointercancel', onTagDragUp, { once: true });
+  });
+}
+
+function onTagDragMove(e) {
+  const d = tagDrag;
+  if (!d) return;
+  if (!d.active) {
+    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+    d.active = true;
+    closeTagMenu();
+    const ph = document.createElement('span');
+    ph.className = 'tag-slot';
+    ph.id = 'tag-slot';
+    ph.style.width = d.w + 'px';
+    ph.style.height = d.h + 'px';
+    d.container.insertBefore(ph, d.wrap.nextSibling);
+    const r = d.wrap.getBoundingClientRect();
+    d.wrap.classList.add('tag-floating');
+    d.wrap.style.width = d.w + 'px';
+    d.wrap.style.height = d.h + 'px';
+    d.wrap.style.left = r.left + 'px';
+    d.wrap.style.top = r.top + 'px';
+  }
+  d.wrap.style.left = (e.clientX - d.offX) + 'px';
+  d.wrap.style.top = (e.clientY - d.offY) + 'px';
+  const ph = document.getElementById('tag-slot');
+  if (!ph) return;
+  const others = [...d.container.querySelectorAll('.tag-chip-wrap')].filter(w => w !== d.wrap);
+  let ref = null;
+  for (const w of others) {
+    const r = w.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (e.clientY < cy - r.height / 2 || (Math.abs(e.clientY - cy) <= r.height / 2 && e.clientX < cx)) { ref = w; break; }
+  }
+  if (ref) d.container.insertBefore(ph, ref); else d.container.appendChild(ph);
+}
+
+async function onTagDragUp() {
+  document.removeEventListener('pointermove', onTagDragMove);
+  const d = tagDrag;
+  tagDrag = null;
+  if (!d || !d.active) return;
+  tagDragSuppressClick = true;
+  const order = [];
+  [...d.container.children].forEach(node => {
+    if (node.id === 'tag-slot') order.push(d.name);
+    else if (node.classList && node.classList.contains('tag-chip-wrap') && node !== d.wrap) {
+      const chip = node.querySelector('.tag-chip.draggable');
+      if (chip) order.push(chip.dataset.tag);
+    }
+  });
+  try {
+    await setTagsOrder(d.scopeId, order);
+    await loadStrategies();
+  } catch (err) { showToast(err.message, 'error'); }
+  renderTagCloud(d.containerId, d.inputId);
+}
+
+// Menú ••• de una etiqueta: Editar (renombra en TODOS los trades del alcance,
+// solo dentro de él) / Eliminar (sale de la lista; los trades que la tienen
+// la conservan y pasa a verse en amarillo). En las etiquetas sueltas suma
+// "Asignar a:", que la pasa a la lista de la estrategia elegida.
 function closeTagMenu() {
   const m = document.getElementById('tag-menu');
   if (m) m.remove();
@@ -608,20 +693,33 @@ function openTagMenu(anchor, tag, containerId, inputId) {
   closeTagMenu();
   const kind = containerId.indexOf('edit') === 0 ? 'edit' : 'add';
   const strategyId = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
-  const usage = tagUsageCount(strategyId, tag);
+  const isLoose = !strategyId;
+  const up = String(tag || '').toUpperCase();
+  const usage = isLoose
+    ? state.trades.filter(t => !t.strategyId && (t.tags || []).some(x => String(x).toUpperCase() === up)).length
+    : tagUsageCount(strategyId, tag);
+  const usageText = isLoose
+    ? `Usada en ${usage} trade${usage === 1 ? '' : 's'} sin estrategia (en este modo)`
+    : `Usada en ${usage} trade${usage === 1 ? '' : 's'} de esta estrategia (en este modo)`;
+  const assignHTML = isLoose ? `
+    <div class="tag-menu-label">Asignar a:</div>
+    ${state.strategies.length
+      ? state.strategies.map(s => `<button type="button" class="tag-menu-item" data-assign="${esc(s.id)}">${esc(s.name)}</button>`).join('')
+      : '<div class="tag-menu-usage">Todavía no hay estrategias creadas.</div>'}` : '';
   const menu = document.createElement('div');
   menu.id = 'tag-menu';
   menu.className = 'tag-menu';
   menu.innerHTML = `
     <div class="tag-menu-head">${esc(tag)}</div>
-    <div class="tag-menu-usage">Usada en ${usage} trade${usage === 1 ? '' : 's'} de esta estrategia (en este modo)</div>
+    <div class="tag-menu-usage">${usageText}</div>
     <button type="button" class="tag-menu-item" data-act="edit">Editar</button>
     <div class="tag-menu-edit" hidden>
       <input type="text" class="form-input tag-menu-input" value="${esc(tag)}" />
       <button type="button" class="tag-menu-save">Renombrar en todos los trades</button>
     </div>
+    ${assignHTML}
     <button type="button" class="tag-menu-item danger" data-act="delete">Eliminar de la lista</button>
-    <div class="tag-menu-note">Al eliminar, los trades que ya la tienen la conservan y se muestra en amarillo en el historial, como señal de "a revisar".</div>`;
+    <div class="tag-menu-note">Al eliminar, los trades que ya la tienen la conservan y se muestra en amarillo en el historial, como señal de "a revisar".${isLoose ? ' Al asignarla a una estrategia, sale de esta lista y entra en la de esa estrategia; los trades sin estrategia la conservan.' : ''}</div>`;
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.top = (window.scrollY + r.bottom + 6) + 'px';
@@ -636,7 +734,8 @@ function openTagMenu(anchor, tag, containerId, inputId) {
     const newName = menu.querySelector('.tag-menu-input').value.trim().toUpperCase();
     if (!newName || newName === tag.toUpperCase()) { closeTagMenu(); return; }
     try {
-      await renameStrategyTag(strategyId, tag, newName);
+      if (isLoose) await renameLooseTag(tag, newName);
+      else await renameStrategyTag(strategyId, tag, newName);
       const input = document.getElementById(inputId);
       if (input) {
         const cur = input.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
@@ -646,12 +745,15 @@ function openTagMenu(anchor, tag, containerId, inputId) {
       await loadData();
       closeTagMenu();
       renderAll();
-      showToast(`Etiqueta renombrada a "${newName}" en toda la estrategia`, 'success');
+      showToast(isLoose
+        ? `Etiqueta renombrada a "${newName}" en todos los trades sin estrategia`
+        : `Etiqueta renombrada a "${newName}" en toda la estrategia`, 'success');
     } catch (err) { showToast(err.message, 'error'); }
   };
   menu.querySelector('[data-act="delete"]').onclick = async () => {
     try {
-      await deleteStrategyTag(strategyId, tag);
+      if (isLoose) await deleteLooseTag(tag);
+      else await deleteStrategyTag(strategyId, tag);
       await loadStrategies();
       closeTagMenu();
       renderTagCloud(containerId, inputId);
@@ -659,6 +761,19 @@ function openTagMenu(anchor, tag, containerId, inputId) {
       showToast(`"${tag}" salió de la lista. Los trades que la tienen la conservan.`, 'success');
     } catch (err) { showToast(err.message, 'error'); }
   };
+  menu.querySelectorAll('[data-assign]').forEach(btn => {
+    btn.onclick = async () => {
+      const target = strategyById(btn.dataset.assign);
+      try {
+        await assignLooseTag(tag, btn.dataset.assign);
+        await loadStrategies();
+        closeTagMenu();
+        renderTagCloud(containerId, inputId);
+        renderHistory();
+        showToast(`"${tag}" asignada a ${target ? target.name : 'la estrategia'}. Los trades sin estrategia la conservan.`, 'success');
+      } catch (err) { showToast(err.message, 'error'); }
+    };
+  });
 }
 
 // Al guardar un trade, las etiquetas que todavía no existen en el registro de
@@ -709,11 +824,49 @@ function activeTagNames(strategyId) {
     .map(x => x.name);
 }
 
+// Como activeTagNames pero respetando el orden elegido por el usuario
+// (sortOrder; sin orden guardado vale el orden de creación). Sirve para una
+// estrategia o para las sueltas (scopeId = LOOSE_TAGS_ID).
+function orderedTagNames(scopeId) {
+  if (!scopeId) return [];
+  return state.strategyTags
+    .filter(x => x.strategyId === scopeId && !x.deleted)
+    .sort((a, b) => ((a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER))
+      || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+      || a.name.localeCompare(b.name))
+    .map(x => x.name);
+}
+
+// La lista de etiquetas SUELTAS (sin estrategia) que muestra el formulario
+// cuando no hay ninguna estrategia seleccionada: primero las registradas (en
+// su orden), después las que solo existen en trades sin estrategia de este
+// modo y todavía no tienen registro. Las eliminadas del registro no vuelven.
+function looseTagNames(currentTags) {
+  const registered = orderedTagNames(LOOSE_TAGS_ID);
+  const deleted = new Set(state.strategyTags
+    .filter(x => x.strategyId === LOOSE_TAGS_ID && x.deleted)
+    .map(x => x.name.toUpperCase()));
+  const seen = new Set(registered.map(n => n.toUpperCase()));
+  const out = [...registered];
+  const push = raw => {
+    const up = String(raw || '').toUpperCase();
+    if (up && !seen.has(up) && !deleted.has(up)) { seen.add(up); out.push(up); }
+  };
+  (currentTags || []).forEach(push);
+  state.trades.filter(t => !t.strategyId).forEach(t => (t.tags || []).forEach(push));
+  return out;
+}
+
 // Una etiqueta está "a revisar" (amarillo) si ya no está en la lista activa de
 // su estrategia: fue eliminada del registro o nunca llegó a registrarse.
+// En los trades SIN estrategia, solo cuenta como eliminada si su registro de
+// suelta dice deleted (una suelta nunca registrada es una etiqueta normal).
 function isTagDeleted(strategyId, tag) {
-  if (!strategyId) return false;
   const up = String(tag || '').toUpperCase();
+  if (!strategyId) {
+    const loose = state.strategyTags.find(x => x.strategyId === LOOSE_TAGS_ID && x.name.toUpperCase() === up);
+    return !!loose && !!loose.deleted;
+  }
   const rec = state.strategyTags.find(x => x.strategyId === strategyId && x.name.toUpperCase() === up);
   return !rec || !!rec.deleted;
 }
@@ -1256,7 +1409,7 @@ function bindTradeForm() {
     try {
       if(state.mode==='live') await addLiveTrade(data);
       else await addTrade(data);
-      await registerNewTags(data.strategyId, data.tags);
+      await registerNewTags(data.strategyId || LOOSE_TAGS_ID, data.tags);
       showToast('Trade guardado correctamente','success');
       form.reset();
       resetImageState(state.formImages);
@@ -1496,7 +1649,7 @@ function bindEditModal() {
     try {
       if(state.mode==='live') await updateLiveTrade(state.editingTradeId,data);
       else await updateTrade(state.editingTradeId,data);
-      await registerNewTags(data.strategyId, data.tags);
+      await registerNewTags(data.strategyId || LOOSE_TAGS_ID, data.tags);
       closeEditModal(); showToast('Trade actualizado','success');
       await loadData(); renderAll();
     } catch(err){errEl.textContent=err.message;}

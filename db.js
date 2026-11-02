@@ -370,3 +370,73 @@ export async function deleteStrategyTag(strategyId, name) {
   const rec = all.find(t => (t.name || '').trim().toLowerCase() === clean.toLowerCase());
   if (rec) await db.strategyTags.update(rec.id, { deleted: 1, updatedAt: nowISO() });
 }
+
+// ── ETIQUETAS SIN ESTRATEGIA (sueltas) Y ORDEN DE LAS LISTAS ─────────────────
+// Las etiquetas que no pertenecen a ninguna estrategia viven en el mismo
+// registro (strategyTags) con un strategyId centinela. Así comparten
+// comportamiento con las de las estrategias: renombrar, eliminar de la lista
+// (los trades la conservan, amarillo en el historial), reactivar y ordenar.
+// El registro es compartido entre backtesting y live, como el de estrategias.
+export const LOOSE_TAGS_ID = '__none__';
+
+// Renombra una etiqueta suelta en TODOS los trades SIN estrategia (backtest y
+// live) que la tengan. Si el nombre nuevo ya existe entre las sueltas, fusiona.
+export async function renameLooseTag(oldName, newName) {
+  const oldClean = String(oldName || '').trim();
+  const newClean = String(newName || '').trim();
+  if (!oldClean || !newClean || oldClean === newClean) return;
+  await addStrategyTag(LOOSE_TAGS_ID, newClean); // asegura el registro destino
+  const all = await db.strategyTags.where('strategyId').equals(LOOSE_TAGS_ID).toArray();
+  const rec = all.find(t => (t.name || '').trim().toLowerCase() === oldClean.toLowerCase());
+  if (rec) await db.strategyTags.delete(rec.id);
+  for (const table of [db.trades, db.liveTrades]) {
+    const rows = await table.toArray();
+    for (const t of rows) {
+      if (t.strategyId) continue; // solo trades sin estrategia
+      const tags = Array.isArray(t.tags) ? t.tags : [];
+      if (!tags.some(x => String(x).trim().toLowerCase() === oldClean.toLowerCase())) continue;
+      const replaced = tags.map(x => String(x).trim().toLowerCase() === oldClean.toLowerCase() ? newClean : x);
+      const dedup = [...new Map(replaced.map(x => [String(x).trim().toLowerCase(), x])).values()];
+      await table.update(t.id, { tags: dedup, updatedAt: nowISO() });
+    }
+  }
+}
+
+// Elimina una etiqueta suelta de la lista: crea el registro si la etiqueta
+// solo existía en los trades, para que no vuelva a aparecer derivada de ellos.
+// Los trades que la tienen LA CONSERVAN (amarillo en el historial).
+export async function deleteLooseTag(name) {
+  const clean = String(name || '').trim();
+  if (!clean) return;
+  await addStrategyTag(LOOSE_TAGS_ID, clean); // asegura que exista el registro
+  await deleteStrategyTag(LOOSE_TAGS_ID, clean);
+}
+
+// Asigna una etiqueta suelta a una estrategia: entra en la lista de esa
+// estrategia y sale de la lista de sueltas. Los trades sin estrategia que la
+// tienen no cambian (la conservan como etiqueta).
+export async function assignLooseTag(name, strategyId) {
+  const clean = String(name || '').trim();
+  if (!clean || !strategyId) return;
+  await addStrategyTag(strategyId, clean);
+  await deleteLooseTag(clean);
+}
+
+// Guarda el orden de una lista de etiquetas (de una estrategia o de las
+// sueltas) en el campo sortOrder de cada registro. No reactiva etiquetas
+// eliminadas: si el registro existe solo se le actualiza el orden; si no
+// existe (etiqueta que solo vivía en los trades) se crea activo.
+export async function setTagsOrder(scopeId, orderedNames) {
+  if (!scopeId || !Array.isArray(orderedNames)) return;
+  const all = await db.strategyTags.where('strategyId').equals(scopeId).toArray();
+  for (let i = 0; i < orderedNames.length; i++) {
+    const clean = String(orderedNames[i] || '').trim();
+    if (!clean) continue;
+    const rec = all.find(t => (t.name || '').trim().toLowerCase() === clean.toLowerCase());
+    if (rec) {
+      if (rec.sortOrder !== i) await db.strategyTags.update(rec.id, { sortOrder: i, updatedAt: nowISO() });
+    } else {
+      await db.strategyTags.add({ id: uuid(), strategyId: scopeId, name: clean, deleted: 0, sortOrder: i, createdAt: nowISO(), updatedAt: nowISO() });
+    }
+  }
+}

@@ -742,6 +742,14 @@ body.light-mode .tag-chip.tag-orphan { background: rgba(180,140,20,.12); color: 
 .tag-menu-edit { display: flex; flex-direction: column; gap: 8px; }
 .tag-menu-save { background: var(--accent); border: none; color: var(--bg-deep); border-radius: 8px; padding: 9px 12px; font-weight: 800; cursor: pointer; font: inherit; font-size: .85rem; }
 
+/* ── Etiquetas: reordenar arrastrando y menú de sueltas ──────────────────── */
+.tag-chip.draggable { cursor: grab; touch-action: none; }
+.tag-grip { color: var(--text-muted); font-size: .6rem; letter-spacing: -2px; margin-right: 6px; pointer-events: none; }
+.tag-chip-wrap.tag-floating { position: fixed; z-index: 950; pointer-events: none; }
+.tag-chip-wrap.tag-floating .tag-chip { box-shadow: 0 12px 26px rgba(0,0,0,.28); border-color: var(--accent); cursor: grabbing; }
+.tag-slot { display: inline-flex; border: 2px dashed var(--accent); border-radius: 15px; opacity: .6; }
+.tag-menu-label { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding: 8px 10px 2px; }
+
 /* ── Imágenes del formulario ─────────────────────────────────────────────── */
 .img-slots { display: grid; gap: 14px; }
 .img-slot { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; background: var(--bg-input); transition: border-color .2s ease, box-shadow .2s ease; }
