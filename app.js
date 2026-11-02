@@ -5,7 +5,9 @@ import {
   getAllTrades, addTrade, updateTrade, deleteTrade,
   getAllLiveTrades, addLiveTrade, updateLiveTrade, deleteLiveTrade,
   getAllNotes, addNote, deleteNote,
-  getAllLiveNotes, addLiveNote, deleteLiveNote
+  getAllLiveNotes, addLiveNote, deleteLiveNote,
+  getAllStrategies, addStrategy as dbAddStrategy, getAllStrategyTags,
+  addStrategyTag, renameStrategyTag, deleteStrategyTag, ensureTradeStrategies
 } from './db.js';
 import { enterChallengeMode, restoreOriginalTabs } from './challenge-ui.js';
 import { getAllChallenges, computeChallengeMetrics } from './challenge.js';
@@ -35,11 +37,23 @@ const state = {
   editingTradeId: null,
   currentTab: 'dashboard',
   analyticsTags: [],
+  // Rediseño 2026-11: estrategias como entidades (tabla strategies) y registro
+  // de etiquetas por estrategia (tabla strategyTags). Las selecciones de cada
+  // apartado guardan el ID de estrategia elegido ('' = todas).
+  strategies: [],
+  strategyTags: [],
+  dashboardStrategyId: '',
+  analyticsStrategyId: '',
+  insightsStrategyId: '',
+  formStrategyId: '',
+  editStrategyId: '',
+  formImages: null,
+  editFormImages: null,
   analyticsCalendarMonths: [],
   analyticsCalendarMonth: '',
   customTags: readStoredArray('journal_custom_tags'),
   hiddenTags: readStoredArray('journal_hidden_tags'),
-  historyFilters: { tag:'', session:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent' },
+  historyFilters: { tag:'', session:'', result:'', dateFrom:'', dateTo:'', smt:'', sort:'recent', strategy:'', challenge:'' },
   bound: false // flag para evitar listeners duplicados
 };
 
@@ -58,6 +72,10 @@ export async function boot() {
   checkSession();
   initTheme();
   await migrateTradesToTags();
+  // Red de seguridad del rediseño: trades sin estrategia (p. ej. cargados
+  // desde otro dispositivo con la versión vieja) reciben la suya acá.
+  await ensureTradeStrategies().catch(e => console.warn('[boot] ensureTradeStrategies:', e.message));
+  await loadStrategies();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
@@ -197,7 +215,10 @@ window.enterMode = async function(mode) {
   }
   
   state.mode = mode;
-  state.analyticsStrategy = '';
+  state.dashboardStrategyId = '';
+  state.analyticsStrategyId = '';
+  state.analyticsTags = [];
+  state.insightsStrategyId = '';
   state.bound = false;
   showAppScreen();
   restoreOriginalTabs();
@@ -327,6 +348,7 @@ async function loadAllData() {
     getAllNotes().catch(()=>[]),
     getAllLiveNotes().catch(()=>[])
   ]);
+  await loadStrategies();
   state.allBtTrades   = btTrades;
   state.allLiveTrades = liveTrades;
   state.allBtNotes    = btNotes;
@@ -343,21 +365,24 @@ function renderModeStats() {
   const mBt   = computeMetrics(bt);
   const mLive = computeMetrics(live);
   const mAll  = computeMetrics(all);
-  setEl('ms-pnl',       fmtPnl(mAll.totalPnl), colorClass(mAll.totalPnl));
   setEl('ms-wr',        mAll.winRate!==null?fmtPct(mAll.winRate):'N/A', mAll.winRate!==null?colorClass(mAll.winRate-.5):'neutral');
-  setEl('ms-bt-count',  bt.length);
-  setEl('ms-live-count',live.length);
+  setEl('ms-total-count', all.length);
   setEl('ms-bt-notes-count', btNotes.length);
   setEl('ms-live-notes-count', liveNotes.length);
   setEl('ms-total-notes-count', btNotes.length + liveNotes.length);
   setEl('ms-data-source', `${db && db.cloud ? 'Cloud activo' : 'Solo local'} · actualizado ${state.lastModeLoadAt ? fmtDateTime(state.lastModeLoadAt) : 'ahora'}`);
-  setEl('mc-bt-count',  bt.length);
-  setEl('mc-bt-wr',     mBt.winRate!==null?fmtPct(mBt.winRate):'N/A');
-  setEl('mc-bt-pnl',    fmtPnl(mBt.totalPnl), colorClass(mBt.totalPnl));
-  setEl('mc-live-count',live.length);
-  setEl('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
-  setEl('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
+  setText('mc-bt-count',  bt.length);
+  setText('mc-bt-wr',     mBt.winRate!==null?fmtPct(mBt.winRate):'N/A');
+  setText('mc-bt-pnl',    fmtPnl(mBt.totalPnl), colorClass(mBt.totalPnl));
+  setText('mc-bt-best',   mBt.bestStreak);
+  setText('mc-bt-worst',  mBt.worstStreak);
+  setText('mc-live-count',live.length);
+  setText('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
+  setText('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
+  setText('mc-live-best', mLive.bestStreak);
+  setText('mc-live-worst',mLive.worstStreak);
   renderModePreviews(bt, live);
+  renderModeStrategies(all);
   // Challenge stats
  import('./challenge.js').then(m => m.getAllChallenges()).then(challenges => {
   const m = computeChallengeMetrics(challenges);
@@ -389,6 +414,22 @@ function renderModeStats() {
       });
     } catch(e){}
   }
+}
+
+function renderModeStrategies(allTrades) {
+  const wrap = document.getElementById('mode-strategies');
+  if (!wrap) return;
+  if (!state.strategies.length) {
+    wrap.innerHTML = '<div class="picker-empty">Todavía no hay estrategias.</div>';
+    return;
+  }
+  wrap.innerHTML = state.strategies.map(s => {
+    const st = strategyStatsLine(allTrades.filter(t => t.strategyId === s.id));
+    return `<div class="mode-strategy-card">
+      <div class="mode-strategy-name">${esc(s.name)}</div>
+      <div class="mode-strategy-stats"><span>Trades <strong>${st.count}</strong></span><span>WR <strong>${st.wr !== null ? fmtPct(st.wr) : 'N/A'}</strong></span><span>P&L <strong>${fmtPnl(st.pnl)}</strong></span><span>EV <strong>${st.ev !== null ? fmtPnl(st.ev) : 'N/A'}</strong></span></div>
+    </div>`;
+  }).join('');
 }
 
 function renderModePreviews(btTrades, liveTrades) {
@@ -480,25 +521,34 @@ function renderTagCloud(containerId, inputId) {
   const input = document.getElementById(inputId);
   if (!container || !input) return;
 
-  const allTags = new Set();
-  state.trades.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
-  state.customTags.forEach(tag => allTags.add(tag));
-  // Incluir SMT siempre por defecto
-  allTags.add('SMT');
-  const sortedTags = [...allTags].filter(tag => !state.hiddenTags.includes(tag)).sort();
-
+  const kind = containerId.indexOf('edit') === 0 ? 'edit' : 'add';
+  const strategyId = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
   const getCurrentTags = () => input.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
 
-  let html = sortedTags.map(tag => {
-    const active = getCurrentTags().includes(tag);
-    const isCustom = state.customTags.includes(tag);
-    return `<span class="tag-chip-wrap">
-      <button type="button" class="tag-chip ${active?'active':''} ${isCustom?'custom':''}" data-tag="${esc(tag)}">${esc(tag)}</button>
-      <button type="button" class="tag-chip-remove" data-tag="${esc(tag)}" title="Ocultar etiqueta" aria-label="Ocultar etiqueta ${esc(tag)}">×</button>
-    </span>`;
-  }).join('');
+  // Las etiquetas son POR estrategia: sin estrategia elegida no hay lista.
+  if (!strategyId) {
+    container.innerHTML = '<div class="picker-empty">Primero elegí una estrategia: cada estrategia tiene su propia lista de etiquetas.</div>';
+    return;
+  }
 
-  // Control integrado para añadir etiquetas (evita usar prompt(), no compatible con algunos navegadores integrados)
+  const active = activeTagNames(strategyId);
+  const current = getCurrentTags();
+  // Etiquetas que el trade ya tiene pero ya no están en la lista activa de la
+  // estrategia (eliminadas): se muestran en amarillo, "a revisar".
+  const orphan = current.filter(t => !active.some(a => a.toUpperCase() === t));
+
+  const chipHTML = (tag, isOrphan) => {
+    const isActive = current.includes(tag.toUpperCase());
+    return `<span class="tag-chip-wrap">
+      <button type="button" class="tag-chip ${isActive ? 'active' : ''} ${isOrphan ? 'tag-orphan' : ''}" data-tag="${esc(tag)}"${isOrphan ? ' title="Etiqueta fuera de la lista de la estrategia — a revisar"' : ''}>${esc(tag)}</button>
+      <button type="button" class="tag-chip-menu" data-tag="${esc(tag)}" title="Editar o eliminar etiqueta" aria-label="Opciones de la etiqueta ${esc(tag)}">•••</button>
+    </span>`;
+  };
+
+  let html = active.map(tag => chipHTML(tag, false)).join('')
+    + orphan.map(tag => chipHTML(tag, true)).join('');
+
+  // Control integrado para añadir etiquetas a la lista de la estrategia
   html += `<span class="tag-add-control">
     <button type="button" class="tag-chip btn-add-tag-variant" title="Añadir nueva etiqueta" aria-label="Añadir nueva etiqueta">+</button>
     <span class="tag-add-form" hidden>
@@ -506,13 +556,13 @@ function renderTagCloud(containerId, inputId) {
       <button type="button" class="tag-add-submit">Añadir</button>
     </span>
   </span>`;
-  
+
   container.innerHTML = html;
 
   container.querySelectorAll('.tag-chip:not(.btn-add-tag-variant)').forEach(btn => {
     btn.onclick = () => {
       let tags = getCurrentTags();
-      const tag = btn.dataset.tag;
+      const tag = btn.dataset.tag.toUpperCase();
       if (tags.includes(tag)) {
         tags = tags.filter(t => t !== tag);
       } else {
@@ -523,16 +573,10 @@ function renderTagCloud(containerId, inputId) {
     };
   });
 
-  container.querySelectorAll('.tag-chip-remove').forEach(btn => {
-    btn.onclick = () => {
-      const tag = btn.dataset.tag;
-      state.hiddenTags = [...new Set([...state.hiddenTags, tag])];
-      state.customTags = state.customTags.filter(item => item !== tag);
-      localStorage.setItem('journal_hidden_tags', JSON.stringify(state.hiddenTags));
-      localStorage.setItem('journal_custom_tags', JSON.stringify(state.customTags));
-      input.value = getCurrentTags().filter(item => item !== tag).join(', ');
-      renderTagCloud(containerId, inputId);
-      showToast(`Etiqueta “${tag}” ocultada. Los trades existentes no cambian.`, 'success');
+  container.querySelectorAll('.tag-chip-menu').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      openTagMenu(btn, btn.dataset.tag, containerId, inputId);
     };
   });
 
@@ -540,16 +584,13 @@ function renderTagCloud(containerId, inputId) {
   const addForm = container.querySelector('.tag-add-form');
   const addInput = container.querySelector('.tag-add-input');
   const addSubmit = container.querySelector('.tag-add-submit');
-  const addTag = () => {
+  const addTag = async () => {
     const cleanTag = (addInput?.value || '').trim().toUpperCase();
     if (!cleanTag) return;
-    state.hiddenTags = state.hiddenTags.filter(tag => tag !== cleanTag);
-    localStorage.setItem('journal_hidden_tags', JSON.stringify(state.hiddenTags));
-    if (!state.customTags.includes(cleanTag)) {
-      state.customTags.push(cleanTag);
-      localStorage.setItem('journal_custom_tags', JSON.stringify(state.customTags));
-    }
-    input.value = [...getCurrentTags(), cleanTag].filter((tag, index, tags) => tags.indexOf(tag) === index).join(', ');
+    await addStrategyTag(strategyId, cleanTag);
+    await loadStrategies();
+    const cur = getCurrentTags();
+    if (!cur.includes(cleanTag)) input.value = [...cur, cleanTag].join(', ');
     renderTagCloud(containerId, inputId);
   };
   if (addBtn && addForm && addInput) {
@@ -565,6 +606,86 @@ function renderTagCloud(containerId, inputId) {
   if (addSubmit) addSubmit.onclick = addTag;
 }
 
+// Menú ••• de una etiqueta: Editar (renombra en TODOS los trades de la
+// estrategia, solo dentro de ella) / Eliminar (sale de la lista; los trades
+// que la tienen la conservan y pasa a verse en amarillo).
+function closeTagMenu() {
+  const m = document.getElementById('tag-menu');
+  if (m) m.remove();
+  document.removeEventListener('click', tagMenuOutside);
+}
+function tagMenuOutside(e) {
+  const m = document.getElementById('tag-menu');
+  if (m && !m.contains(e.target)) closeTagMenu();
+}
+function openTagMenu(anchor, tag, containerId, inputId) {
+  closeTagMenu();
+  const kind = containerId.indexOf('edit') === 0 ? 'edit' : 'add';
+  const strategyId = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
+  const usage = tagUsageCount(strategyId, tag);
+  const menu = document.createElement('div');
+  menu.id = 'tag-menu';
+  menu.className = 'tag-menu';
+  menu.innerHTML = `
+    <div class="tag-menu-head">${esc(tag)}</div>
+    <div class="tag-menu-usage">Usada en ${usage} trade${usage === 1 ? '' : 's'} de esta estrategia (en este modo)</div>
+    <button type="button" class="tag-menu-item" data-act="edit">Editar</button>
+    <div class="tag-menu-edit" hidden>
+      <input type="text" class="form-input tag-menu-input" value="${esc(tag)}" />
+      <button type="button" class="tag-menu-save">Renombrar en todos los trades</button>
+    </div>
+    <button type="button" class="tag-menu-item danger" data-act="delete">Eliminar de la lista</button>
+    <div class="tag-menu-note">Al eliminar, los trades que ya la tienen la conservan y se muestra en amarillo en el historial, como señal de "a revisar".</div>`;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = (window.scrollY + r.bottom + 6) + 'px';
+  menu.style.left = Math.max(8, Math.min(window.scrollX + r.left - 140, window.innerWidth - 300)) + 'px';
+  setTimeout(() => document.addEventListener('click', tagMenuOutside), 0);
+
+  menu.querySelector('[data-act="edit"]').onclick = () => {
+    menu.querySelector('.tag-menu-edit').hidden = false;
+    menu.querySelector('.tag-menu-input').focus();
+  };
+  menu.querySelector('.tag-menu-save').onclick = async () => {
+    const newName = menu.querySelector('.tag-menu-input').value.trim().toUpperCase();
+    if (!newName || newName === tag.toUpperCase()) { closeTagMenu(); return; }
+    try {
+      await renameStrategyTag(strategyId, tag, newName);
+      const input = document.getElementById(inputId);
+      if (input) {
+        const cur = input.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+        input.value = [...new Set(cur.map(x => x === tag.toUpperCase() ? newName : x))].join(', ');
+      }
+      await loadStrategies();
+      await loadData();
+      closeTagMenu();
+      renderAll();
+      showToast(`Etiqueta renombrada a "${newName}" en toda la estrategia`, 'success');
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+  menu.querySelector('[data-act="delete"]').onclick = async () => {
+    try {
+      await deleteStrategyTag(strategyId, tag);
+      await loadStrategies();
+      closeTagMenu();
+      renderTagCloud(containerId, inputId);
+      renderHistory();
+      showToast(`"${tag}" salió de la lista. Los trades que la tienen la conservan.`, 'success');
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+}
+
+// Al guardar un trade, las etiquetas que todavía no existen en el registro de
+// la estrategia se registran (las eliminadas NO se reactivan solas).
+async function registerNewTags(strategyId, tags) {
+  if (!strategyId || !Array.isArray(tags)) return;
+  for (const tag of tags) {
+    const rec = state.strategyTags.find(x => x.strategyId === strategyId && x.name.toUpperCase() === String(tag).toUpperCase());
+    if (!rec) await addStrategyTag(strategyId, tag);
+  }
+  await loadStrategies();
+}
+
 // ── DATA ──────────────────────────────────────────────────────────────────────
 async function loadData() {
   if (state.mode === 'live') {
@@ -573,6 +694,115 @@ async function loadData() {
   } else {
     state.trades = await getAllTrades().catch(()=>[]);
     state.notes  = await getAllNotes().catch(()=>[]);
+  }
+  await loadStrategies();
+}
+
+// ── ESTRATEGIAS Y ETIQUETAS (rediseño 2026-11) ───────────────────────────────
+async function loadStrategies() {
+  state.strategies   = await getAllStrategies().catch(()=>[]);
+  state.strategyTags = await getAllStrategyTags().catch(()=>[]);
+}
+
+function strategyById(id) {
+  return state.strategies.find(s => s.id === id) || null;
+}
+
+function strategyNameOf(t) {
+  const s = t && t.strategyId ? strategyById(t.strategyId) : null;
+  return s ? s.name : ((t && t.strategyName) || '');
+}
+
+// Nombres de etiquetas ACTIVAS de una estrategia (las que ofrece el formulario).
+function activeTagNames(strategyId) {
+  if (!strategyId) return [];
+  return state.strategyTags
+    .filter(x => x.strategyId === strategyId && !x.deleted)
+    .map(x => x.name);
+}
+
+// Una etiqueta está "a revisar" (amarillo) si ya no está en la lista activa de
+// su estrategia: fue eliminada del registro o nunca llegó a registrarse.
+function isTagDeleted(strategyId, tag) {
+  if (!strategyId) return false;
+  const up = String(tag || '').toUpperCase();
+  const rec = state.strategyTags.find(x => x.strategyId === strategyId && x.name.toUpperCase() === up);
+  return !rec || !!rec.deleted;
+}
+
+// Cantidad de trades del modo actual que usan una etiqueta dentro de una estrategia.
+function tagUsageCount(strategyId, tag) {
+  const up = String(tag || '').toUpperCase();
+  return state.trades.filter(t => t.strategyId === strategyId && (t.tags || []).some(x => String(x).toUpperCase() === up)).length;
+}
+
+function strategyStatsLine(trades) {
+  const m = computeMetrics(trades);
+  return { count: trades.length, wr: m.winRate, pnl: m.totalPnl, ev: m.ev, best: m.bestStreak, worst: m.worstStreak };
+}
+
+// Rectángulos de estrategia (dashboard / analytics / insights): nombre +
+// estadísticas de esa estrategia dentro del modo actual. Tocar uno lo
+// selecciona; tocarlo de nuevo deselecciona y vuelve a verse todo.
+function renderStrategyPicker(containerId, { trades, selectedId, onSelect }) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const list = state.strategies.filter(s => selectedId === s.id || trades.some(t => t.strategyId === s.id));
+  if (!list.length) {
+    el.innerHTML = '<div class="picker-empty">Todavía no hay estrategias con trades en este modo.</div>';
+    return;
+  }
+  el.innerHTML = list.map(s => {
+    const st = strategyStatsLine(trades.filter(t => t.strategyId === s.id));
+    return `<button type="button" class="strategy-card ${selectedId === s.id ? 'selected' : ''}" data-strategy="${s.id}">
+      <span class="strategy-card-name">${esc(s.name)}<span class="strategy-card-check">✓</span></span>
+      <span class="strategy-card-stats"><span>Trades <strong>${st.count}</strong></span><span>WR <strong>${st.wr !== null ? fmtPct(st.wr) : 'N/A'}</strong></span><span>P&L <strong>${fmtPnl(st.pnl)}</strong></span><span>EV <strong>${st.ev !== null ? fmtPnl(st.ev) : 'N/A'}</strong></span><span>Mejor racha <strong>${st.best}</strong></span><span>Peor racha <strong>${st.worst}</strong></span></span>
+    </button>`;
+  }).join('');
+  el.querySelectorAll('[data-strategy]').forEach(btn =>
+    btn.addEventListener('click', () => onSelect(btn.dataset.strategy)));
+}
+
+// Selector de estrategia del formulario (añadir / editar): solo nombres, más
+// la tarjeta "+ Nueva estrategia" que pide SOLO el nombre y arranca sin etiquetas.
+function renderFormStrategyPicker(containerId, kind) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const selectedId = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
+  const cloudId = kind === 'edit' ? 'edit-tag-cloud' : 't-tag-cloud';
+  const inputId = kind === 'edit' ? 'edit-tags-input' : 't-tags-input';
+  el.innerHTML = state.strategies.map(s =>
+    `<button type="button" class="strategy-card ${selectedId === s.id ? 'selected' : ''}" data-strategy="${s.id}"><span class="strategy-card-name">${esc(s.name)}<span class="strategy-card-check">✓</span></span></button>`
+  ).join('') + `<span class="strategy-new-card"><button type="button" class="strategy-new-btn">+ Nueva estrategia</button><span class="strategy-new-form" hidden><input type="text" class="form-input strategy-new-input" placeholder="Nombre de la estrategia" /><button type="button" class="strategy-new-submit">Crear</button></span></span>`;
+  el.querySelectorAll('[data-strategy]').forEach(btn => btn.addEventListener('click', () => {
+    if (kind === 'edit') state.editStrategyId = btn.dataset.strategy;
+    else state.formStrategyId = btn.dataset.strategy;
+    renderFormStrategyPicker(containerId, kind);
+    renderTagCloud(cloudId, inputId);
+  }));
+  const newBtn = el.querySelector('.strategy-new-btn');
+  const newForm = el.querySelector('.strategy-new-form');
+  const newInput = el.querySelector('.strategy-new-input');
+  if (newBtn && newForm && newInput) {
+    newBtn.onclick = () => { newForm.hidden = !newForm.hidden; if (!newForm.hidden) newInput.focus(); };
+    const create = async () => {
+      const name = (newInput.value || '').trim().toUpperCase();
+      if (!name) return;
+      try {
+        const strat = await dbAddStrategy(name);
+        await loadStrategies();
+        if (kind === 'edit') state.editStrategyId = strat.id;
+        else state.formStrategyId = strat.id;
+        renderFormStrategyPicker(containerId, kind);
+        renderTagCloud(cloudId, inputId);
+        showToast(`Estrategia "${strat.name}" creada`, 'success');
+      } catch (err) { showToast(err.message, 'error'); }
+    };
+    el.querySelector('.strategy-new-submit').onclick = create;
+    newInput.onkeydown = e => {
+      if (e.key === 'Enter') { e.preventDefault(); create(); }
+      if (e.key === 'Escape') newForm.hidden = true;
+    };
   }
 }
 
@@ -598,6 +828,14 @@ function renderAll() {
     });
     // Mapa id -> nombre para la línea "Challenge: ..." del historial de trades.
     const prevSig = challengeMapSig;
+    // Filtro de challenges del Historial (rediseño): mismas opciones que los trades.
+    const chFilter = document.getElementById('filter-challenge');
+    if (chFilter) {
+      const curCh = chFilter.value;
+      chFilter.innerHTML = '<option value="">Todos los challenges</option><option value="none">Sin challenge</option>' +
+        challenges.map(c => `<option value="${c.id}">${esc(c.nombre || c.firma)} (${esc(c.type)})</option>`).join('');
+      chFilter.value = curCh;
+    }
     challengeNameById = {};
     challenges.forEach(c => { challengeNameById[String(c.id)] = c.nombre || c.firma || 'Challenge'; });
     challengeMapSig = challenges.map(c => `${c.id}:${c.nombre || c.firma || ''}`).join('|');
@@ -697,22 +935,34 @@ function equitySeries(trades) {
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
-  const m=computeMetrics(state.trades);
+  renderStrategyPicker('dashboard-strategy-picker', {
+    trades: state.trades,
+    selectedId: state.dashboardStrategyId,
+    onSelect: id => {
+      state.dashboardStrategyId = state.dashboardStrategyId === id ? '' : id;
+      renderDashboard();
+    }
+  });
+  const scope = state.dashboardStrategyId
+    ? state.trades.filter(t => t.strategyId === state.dashboardStrategyId)
+    : state.trades;
+  const m=computeMetrics(scope);
   setEl('stat-pnl',  fmtPnl(m.totalPnl), colorClass(m.totalPnl));
   setEl('stat-wr',   m.winRate!==null?fmtPct(m.winRate):'N/A', m.winRate!==null?colorClass(m.winRate-.5):'neutral');
   setEl('stat-ev',   m.ev!==null?fmtPnl(m.ev):'N/A', m.ev!==null?colorClass(m.ev):'neutral');
   setEl('stat-total',m.totalCount);
   setEl('stat-best', m.bestStreak);
   setEl('stat-worst',m.worstStreak);
-  renderEquityChart(equitySeries(state.trades),'chart-equity');
-  const recent=[...state.trades].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8);
+  renderEquityChart(equitySeries(scope),'chart-equity');
+  const recent=[...scope].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8);
   const container=document.getElementById('recent-trades');
-  if(recent.length===0){container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📊</div>No hay trades aún</div>';return;}
+  if(recent.length===0){container.innerHTML='<div class="empty-state">No hay trades aún</div>';return;}
   container.innerHTML=recent.map(t=>`
     <div class="recent-item">
       <span class="recent-symbol">${esc(t.symbol)}</span>
       <span class="badge badge-side">${t.side}</span>
       <span class="badge ${badgeResult(t.result)}">${t.result}</span>
+      <span class="recent-strategy">${esc(strategyNameOf(t))}</span>
       <span class="recent-date">${fmtDate(t.date)}</span>
       <span class="recent-pnl ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</span>
     </div>`).join('');
@@ -856,11 +1106,145 @@ function collectSmartField(formId, fieldName, selectId, newInputId, storageKey) 
   return value;
 }
 
+// ── IMÁGENES DEL FORMULARIO ──────────────────────────────────────────────────
+// Cada apartado (Entrada / M3 / M15 + extras con título libre) acepta link O
+// archivo subido O arrastrar y soltar. Los archivos viajan como Blob dentro
+// del registro del trade (IndexedDB; con Dexie Cloud sincronizan entre
+// dispositivos y ya quedan disponibles sin internet, sin preparar el viaje).
+function newImageState() {
+  return {
+    slots: {
+      tradingView: { blob: null, name: '' },
+      imageM3:     { blob: null, name: '' },
+      imageM15:    { blob: null, name: '' }
+    },
+    extras: []
+  };
+}
+
+function slotRefresh(slotEl, entry) {
+  const nameEl = slotEl.querySelector('.img-file-name');
+  const clearBtn = slotEl.querySelector('.img-clear');
+  const preview = slotEl.querySelector('.img-preview');
+  if (!nameEl || !preview) return;
+  if (entry && entry.blob) {
+    nameEl.textContent = entry.name || 'imagen subida';
+    if (clearBtn) clearBtn.hidden = false;
+    preview.src = URL.createObjectURL(entry.blob);
+    preview.hidden = false;
+  } else {
+    nameEl.textContent = '';
+    if (clearBtn) clearBtn.hidden = true;
+    preview.hidden = true;
+    preview.removeAttribute('src');
+  }
+}
+
+function wireSlot(slotEl, getEntry, setEntry) {
+  const fileInput = slotEl.querySelector('.img-file');
+  const urlInput = slotEl.querySelector('.img-url');
+  const clearBtn = slotEl.querySelector('.img-clear');
+  if (fileInput) fileInput.addEventListener('change', () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (f) { setEntry({ blob: f, name: f.name }); slotRefresh(slotEl, getEntry()); }
+    fileInput.value = '';
+  });
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    setEntry({ blob: null, name: '' });
+    slotRefresh(slotEl, getEntry());
+  });
+  slotEl.addEventListener('dragover', e => { e.preventDefault(); slotEl.classList.add('drag-over'); });
+  slotEl.addEventListener('dragleave', () => slotEl.classList.remove('drag-over'));
+  slotEl.addEventListener('drop', e => {
+    e.preventDefault();
+    slotEl.classList.remove('drag-over');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f && f.type.indexOf('image/') === 0) { setEntry({ blob: f, name: f.name }); slotRefresh(slotEl, getEntry()); return; }
+    // Arrastrar una imagen desde otra pestaña llega como link: queda como URL.
+    const uri = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim().split('\n')[0];
+    if (uri && urlInput) urlInput.value = uri;
+  });
+}
+
+function createImageBinder(form, getState, extrasEl, addBtn) {
+  form.querySelectorAll('.img-slot[data-slot]').forEach(slotEl => {
+    const key = slotEl.dataset.slot;
+    wireSlot(slotEl,
+      () => getState().slots[key],
+      v => { getState().slots[key] = v; });
+    slotRefresh(slotEl, getState().slots[key]);
+  });
+
+  const renderExtras = () => {
+    const imgState = getState();
+    if (!extrasEl) return;
+    extrasEl.innerHTML = imgState.extras.map(x => `
+      <div class="img-slot img-extra" data-extra="${x.id}">
+        <div class="img-extra-head">
+          <input type="text" class="form-input img-extra-title" placeholder="Título (ej: H1)" value="${esc(x.title)}" />
+          <button type="button" class="img-extra-remove" title="Quitar este apartado">✕</button>
+        </div>
+        <input class="form-input img-url" type="text" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" value="${esc(x.url)}" />
+        <div class="img-slot-bar">
+          <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+          <span class="img-file-name"></span>
+          <button type="button" class="img-clear" hidden>Quitar</button>
+        </div>
+        <img class="img-preview" alt="" hidden />
+      </div>`).join('');
+    extrasEl.querySelectorAll('.img-extra').forEach(slotEl => {
+      const item = getState().extras.find(x => x.id === slotEl.dataset.extra);
+      if (!item) return;
+      slotEl.querySelector('.img-extra-title').addEventListener('input', e => { item.title = e.target.value; });
+      slotEl.querySelector('.img-url').addEventListener('input', e => { item.url = e.target.value; });
+      slotEl.querySelector('.img-extra-remove').addEventListener('click', () => {
+        const s = getState();
+        s.extras = s.extras.filter(x => x.id !== item.id);
+        renderExtras();
+      });
+      wireSlot(slotEl, () => item, v => { item.blob = v.blob; item.name = v.name; });
+      slotRefresh(slotEl, item);
+    });
+  };
+  getState()._renderExtras = renderExtras;
+  renderExtras();
+  if (addBtn && !addBtn._extraBound) {
+    addBtn._extraBound = true;
+    addBtn.addEventListener('click', () => {
+      const s = getState();
+      s.extras.push({ id: 'x' + Math.random().toString(36).slice(2, 9), title: '', url: '', blob: null, name: '' });
+      if (s._renderExtras) s._renderExtras();
+      if (extrasEl) {
+        const titles = extrasEl.querySelectorAll('.img-extra-title');
+        if (titles.length) titles[titles.length - 1].focus();
+      }
+    });
+  }
+  getState()._refreshAll = () => {
+    form.querySelectorAll('.img-slot[data-slot]').forEach(slotEl => slotRefresh(slotEl, getState().slots[slotEl.dataset.slot]));
+    renderExtras();
+  };
+}
+
+function resetImageState(imgState) {
+  if (!imgState) return;
+  imgState.slots.tradingView = { blob: null, name: '' };
+  imgState.slots.imageM3 = { blob: null, name: '' };
+  imgState.slots.imageM15 = { blob: null, name: '' };
+  imgState.extras = [];
+  if (imgState._refreshAll) imgState._refreshAll();
+}
+
 // ── TRADE FORM ────────────────────────────────────────────────────────────────
 function bindTradeForm() {
   const form=document.getElementById('trade-form');
   // Inicializar dropdowns inteligentes solo en backtesting
   initBacktestFormDefaults();
+  // Rediseño: primero la estrategia; sus etiquetas se cargan al elegirla.
+  renderFormStrategyPicker('form-strategy-picker', 'add');
+  state.formImages = newImageState();
+  createImageBinder(form, () => state.formImages, document.getElementById('add-extra-images'), document.getElementById('btn-add-extra-image'));
+  renderTagCloud('t-tag-cloud', 't-tags-input');
   // BE outcome toggle
   form.querySelectorAll('[name="result"]').forEach(radio=>{
     radio.addEventListener('change',()=>{
@@ -880,8 +1264,11 @@ function bindTradeForm() {
     try {
       if(state.mode==='live') await addLiveTrade(data);
       else await addTrade(data);
+      await registerNewTags(data.strategyId, data.tags);
       showToast('Trade guardado correctamente','success');
       form.reset();
+      resetImageState(state.formImages);
+      renderTagCloud('t-tag-cloud', 't-tags-input');
       form.querySelectorAll('.radio-label input[name="side"]')[0].checked=true;
       form.querySelectorAll('.radio-label input[name="result"]')[0].checked=true;
       document.getElementById('be-outcome-section').style.display='none';
@@ -910,8 +1297,16 @@ function collectTradeForm(formId) {
   }
 
   const smtVal = r('smt');
+  // Rediseño: la estrategia sale del selector de rectángulos (ya no del primer
+  // tag). Sin estrategia elegida no se puede guardar.
+  const isEdit = formId !== 'trade-form';
+  const strategyId = isEdit ? state.editStrategyId : state.formStrategyId;
+  if (!strategyId) throw new Error('Elegí una estrategia para el trade');
+  const strat = strategyById(strategyId);
+  const imgState = isEdit ? state.editFormImages : state.formImages;
   return {
-    strategyName: tags[0] || '', // retro-compatibilidad
+    strategyId,
+    strategyName: strat ? strat.name : '',
     tags, date:v('date'), symbol:v('symbol')||collectSmartField(formId,'symbol','t-symbol-select','t-symbol-new-input',STORAGE_SYMBOLS),
     killZone:v('killZone'),side:r('side'),result:r('result'),
     beOutcome:r('beOutcome'),smt:smtVal==='true',
@@ -922,11 +1317,23 @@ function collectTradeForm(formId) {
     errorType:v('errorType'),
     pnl:v('pnl'),rrPlanned:v('rrPlanned'),tradingViewUrl:v('tradingViewUrl'),
     imageM3Url:v('imageM3Url'),imageM15Url:v('imageM15Url'),
+    tradingViewBlob: imgState ? (imgState.slots.tradingView.blob || null) : null,
+    imageM3Blob: imgState ? (imgState.slots.imageM3.blob || null) : null,
+    imageM15Blob: imgState ? (imgState.slots.imageM15.blob || null) : null,
+    extraImages: imgState ? imgState.extras.map(x => ({ id: x.id, title: x.title, url: x.url, blob: x.blob || null })) : [],
     notes:v('notes'),setup:v('setup'),fomo:v('fomo'),aprendizaje:v('aprendizaje')
   };
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────────
+function populateStrategyFilter() {
+  const sel=document.getElementById('filter-strategy'); if(!sel)return;
+  const currentVal=sel.value;
+  sel.innerHTML='<option value="">Todas las estrategias</option>'+
+    state.strategies.map(s=>`<option value="${s.id}"${currentVal===s.id?' selected':''}>${esc(s.name)}</option>`).join('');
+  if (currentVal) sel.value=currentVal;
+}
+
 function populateTagFilter() {
   const sel=document.getElementById('filter-tag'); if(!sel)return;
   const allTags = new Set();
@@ -938,8 +1345,10 @@ function populateTagFilter() {
 }
 
 function bindHistoryFilters() {
-  const ids=['filter-tag','filter-session','filter-smt','filter-result','filter-sort','filter-date-from','filter-date-to'];
+  const ids=['filter-strategy','filter-challenge','filter-tag','filter-session','filter-smt','filter-result','filter-sort','filter-date-from','filter-date-to'];
   const update=()=>{
+    state.historyFilters.strategy=document.getElementById('filter-strategy')?.value||'';
+    state.historyFilters.challenge=document.getElementById('filter-challenge')?.value||'';
     state.historyFilters.tag     =document.getElementById('filter-tag')?.value||'';
     state.historyFilters.session =document.getElementById('filter-session')?.value||'';
     state.historyFilters.smt     =document.getElementById('filter-smt')?.value||'';
@@ -954,8 +1363,13 @@ function bindHistoryFilters() {
 
 function renderHistory() {
   populateTagFilter();
+  populateStrategyFilter();
   let trades=[...state.trades];
+  const totalTrades = trades.length;
   const f=state.historyFilters;
+  if(f.strategy) trades=trades.filter(t=>t.strategyId===f.strategy);
+  if(f.challenge==='none') trades=trades.filter(t=>!t.challengeId);
+  else if(f.challenge) trades=trades.filter(t=>String(t.challengeId)===f.challenge);
   if(f.tag) trades=trades.filter(t=>(t.tags||[]).includes(f.tag));
   if(f.session) trades=trades.filter(t=>t.killZone===f.session);
   if(f.smt !== '') {
@@ -972,11 +1386,13 @@ function renderHistory() {
     const diff = (sortByLoadDate ? getLoadedAt(a) - getLoadedAt(b) : getTradeDate(a) - getTradeDate(b));
     return f.sort === 'oldest' || f.sort === 'loaded-oldest' ? diff : -diff;
   });
+  const countEl=document.getElementById('history-count');
+  if(countEl) countEl.textContent = totalTrades>0 ? `Mostrando ${trades.length} de ${totalTrades} trades` : '';
   const container=document.getElementById('trade-list');
   if(trades.length===0){
     container.innerHTML=state.trades.length>0
-      ?'<div class="empty-state"><div class="empty-state-icon">🔍</div>No hay trades que coincidan</div>'
-      :'<div class="empty-state"><div class="empty-state-icon">📋</div>No hay trades registrados</div>';
+      ?'<div class="empty-state">No hay trades que coincidan</div>'
+      :'<div class="empty-state">No hay trades registrados</div>';
     return;
   }
   container.innerHTML=trades.map(t=>buildTradeCard(t)).join('');
@@ -991,10 +1407,14 @@ function buildTradeCard(t) {
   const beTag = t.result==='BE'&&t.beOutcome
     ? `<span class="badge badge-be" style="font-size:.65rem">BE→${t.beOutcome}</span>` : '';
   const smtTag = t.smt ? `<span class="badge" style="font-size:.65rem;background:rgba(100,200,255,.15);color:#64c8ff;border:1px solid rgba(100,200,255,.3)">SMT</span>` : '';
-  const tagsHtml = (t.tags || []).map(tag => `<span class="badge" style="font-size:.65rem;background:rgba(255,255,255,0.05);color:var(--text-muted);border:1px solid var(--border)">${esc(tag)}</span>`).join(' ');
+  const tagsHtml = (t.tags || []).map(tag => {
+    const del = isTagDeleted(t.strategyId, tag);
+    return `<span class="badge trade-tag ${del ? 'tag-deleted' : ''}"${del ? ' title="Etiqueta fuera de la lista de la estrategia — a revisar"' : ''}>${esc(tag)}</span>`;
+  }).join(' ');
   const chName = t.challengeId ? challengeNameById[String(t.challengeId)] : null;
   const chLine = chName ? `<div style="font-size:.75rem;color:var(--text-muted);margin-top:6px">Challenge: <span style="color:var(--text-sec);font-weight:600">${esc(chName)}</span></div>` : '';
-  
+  const stratName = strategyNameOf(t);
+
   return `
   <div class="trade-item">
     <div class="trade-item-header">
@@ -1003,14 +1423,18 @@ function buildTradeCard(t) {
         ${smtTag}
         ${beTag}
       </div>
-      <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span>
-      <span class="badge ${badgeResult(t.result)}">${t.result}</span>
-      <span class="trade-pnl ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</span>
+      <div class="trade-item-side">
+        <div class="trade-item-badges">
+          <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span>
+          <span class="badge ${badgeResult(t.result)}">${t.result}</span>
+          <span class="trade-pnl ${colorClass(t.pnl)}">${fmtPnl(t.pnl)}</span>
+        </div>
+        ${stratName ? `<span class="strategy-pill">${esc(stratName)}</span>` : ''}
+      </div>
     </div>
     <div class="trade-meta">
-      <span>📅 ${fmtDate(t.date)}</span><span>💱 ${esc(t.symbol)}</span>
-      <span>⏰ ${esc(t.killZone)}</span>
-      ${t.rrPlanned?`<span>📐 RR ${t.rrPlanned}</span>`:''}
+      <span>${fmtDate(t.date)}</span><span class="meta-sep">·</span><span>${esc(t.symbol)}</span><span class="meta-sep">·</span><span>${esc(t.killZone)}</span>
+      ${t.rrPlanned?`<span class="meta-sep">·</span><span>RR ${t.rrPlanned}</span>`:''}
     </div>
     ${chLine}
     ${links?`<div class="trade-links">${links}</div>`:''}
@@ -1038,10 +1462,10 @@ function openDetailModal(id) {
     ?'<span class="badge badge-mode-live">Live</span>'
     :'<span class="badge badge-mode-bt">Backtest</span>';
   document.getElementById('detail-modal-title').innerHTML=
-    `${esc(t.strategyName)} ${modeLabel} <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span> <span class="badge ${badgeResult(t.result)}">${t.result}</span>`;
+    `${esc(strategyNameOf(t))} ${modeLabel} <span class="badge ${t.side==='BUY'?'badge-buy':'badge-sell'}">${t.side}</span> <span class="badge ${badgeResult(t.result)}">${t.result}</span>`;
   const links=tradeImageButtons(t,'detail-link');
   const beOutcomeRow = t.result==='BE'&&t.beOutcome
-    ?`<div class="detail-row"><span class="detail-row-label">Continuó a</span><span class="detail-row-value">${t.beOutcome==='TP'?'✅ TP':'❌ SL'}</span></div>` : '';
+    ?`<div class="detail-row"><span class="detail-row-label">Continuó a</span><span class="detail-row-value">${t.beOutcome}</span></div>` : '';
   const liveSection=state.mode==='live'?`
     <div class="detail-section">Análisis del Trade</div>
     <div class="detail-question"><div class="detail-question-label">¿Cuál fue tu setup?</div><div class="detail-question-answer">${esc(t.setup||'—')}</div></div>
@@ -1059,7 +1483,7 @@ function openDetailModal(id) {
     <div class="detail-row"><span class="detail-row-label">Kill Zone</span><span class="detail-row-value">${esc(t.killZone)}</span></div>
     <div class="detail-row"><span class="detail-row-label">Lado</span><span class="detail-row-value">${t.side==='BUY'?'BUY (Long)':'SELL (Short)'}</span></div>
     <div class="detail-row"><span class="detail-row-label">Resultado</span><span class="detail-row-value">${t.result}</span></div>
-    <div class="detail-row"><span class="detail-row-label">SMT</span><span class="detail-row-value">${t.smt?'✅ Sí':'—'}</span></div>
+    <div class="detail-row"><span class="detail-row-label">SMT</span><span class="detail-row-value">${t.smt?'Sí':'—'}</span></div>
     <div class="detail-row"><span class="detail-row-label">Etiquetas</span><span class="detail-row-value">${(t.tags||[]).join(', ')||'—'}</span></div>
     ${chRow}
     ${beOutcomeRow}
@@ -1073,12 +1497,15 @@ function closeDetailModal() { document.getElementById('detail-modal').classList.
 
 // ── EDIT MODAL ────────────────────────────────────────────────────────────────
 function bindEditModal() {
+  state.editFormImages = newImageState();
+  createImageBinder(document.getElementById('edit-form'), () => state.editFormImages, document.getElementById('edit-extra-images'), document.getElementById('btn-edit-extra-image'));
   document.getElementById('modal-save').addEventListener('click', async()=>{
     const data=collectTradeForm('edit-form');
     const errEl=document.getElementById('edit-form-error');
     try {
       if(state.mode==='live') await updateLiveTrade(state.editingTradeId,data);
       else await updateTrade(state.editingTradeId,data);
+      await registerNewTags(data.strategyId, data.tags);
       closeEditModal(); showToast('Trade actualizado','success');
       await loadData(); renderAll();
     } catch(err){errEl.textContent=err.message;}
@@ -1103,6 +1530,12 @@ function openEditModal(id) {
   const t=state.trades.find(x=>x.id===id); if(!t)return;
   state.editingTradeId=id;
   const f=document.getElementById('edit-form');
+  // Estrategia del trade: por ID; si es un trade viejo que solo trae el
+  // nombre, se busca la estrategia equivalente.
+  state.editStrategyId = t.strategyId
+    || (state.strategies.find(s => s.name.toUpperCase() === String(t.strategyName || '').toUpperCase()) || {}).id
+    || '';
+  renderFormStrategyPicker('edit-strategy-picker', 'edit');
   const set=(name,val)=>{const el=f.querySelector(`[name="${name}"]`);if(el)el.value=val??'';};
   const setRadio=(name,val)=>f.querySelectorAll(`[name="${name}"]`).forEach(r=>{r.checked=String(r.value)===String(val);});
   
@@ -1117,6 +1550,17 @@ function openEditModal(id) {
   set('tags', (t.tags||[]).join(', '));
   renderTagCloud('edit-tag-cloud', 'edit-tags-input');
   set('tradingViewUrl',t.tradingViewUrl);set('imageM3Url',t.imageM3Url);set('imageM15Url',t.imageM15Url);
+  // Imágenes subidas (blobs) y apartados extra del trade
+  const ei = state.editFormImages || (state.editFormImages = newImageState());
+  ei.slots.tradingView = t.tradingViewBlob ? { blob: t.tradingViewBlob, name: 'imagen guardada' } : { blob: null, name: '' };
+  ei.slots.imageM3     = t.imageM3Blob     ? { blob: t.imageM3Blob,     name: 'imagen guardada' } : { blob: null, name: '' };
+  ei.slots.imageM15    = t.imageM15Blob    ? { blob: t.imageM15Blob,    name: 'imagen guardada' } : { blob: null, name: '' };
+  ei.extras = (t.extraImages || []).map(x => ({
+    id: x.id || ('x' + Math.random().toString(36).slice(2, 9)),
+    title: x.title || '', url: x.url || '',
+    blob: x.blob || null, name: x.blob ? 'imagen guardada' : ''
+  }));
+  if (ei._refreshAll) ei._refreshAll();
   // Vinculación a challenge y calidad de ejecución
   const chSel = f.querySelector('[name="challengeId"]');
   if (chSel) {
@@ -1171,34 +1615,77 @@ function confirmDelete(id) {
 }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
-function renderAnalytics() {
-  const allTags = new Set();
-  state.trades.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
-  const sortedTags = [...allTags].sort();
-
-  const btnContainer=document.getElementById('tag-filter-btns');
-  if(btnContainer){
-    btnContainer.innerHTML=`<button class="strategy-filter-btn ${state.analyticsTags.length===0?'active':''}" data-tag="__all__">Todas</button>`
-      +sortedTags.map(s=>`<button class="strategy-filter-btn ${state.analyticsTags.includes(s)?'active':''}" data-tag="${esc(s)}">${esc(s)}</button>`).join('');
-    btnContainer.querySelectorAll('.strategy-filter-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        const tag = btn.dataset.tag;
-        if (tag === '__all__') {
-          state.analyticsTags = [];
-        } else {
-          if (state.analyticsTags.includes(tag)) {
-            state.analyticsTags = state.analyticsTags.filter(t => t !== tag);
-          } else {
-            state.analyticsTags.push(tag);
-          }
-        }
-        renderAnalytics(); 
-      });
-    });
+// Filas de etiquetas seleccionables de Analytics: muestran SOLO las
+// etiquetas de la estrategia elegida (o las de todas si no hay selección),
+// cada una con sus números dentro del alcance. Se pueden combinar varias.
+function renderAnalyticsTagRows(scopedTrades) {
+  const wrap = document.getElementById('analytics-tag-rows');
+  const scopeLabel = document.getElementById('analytics-tags-scope');
+  const allBtn = document.getElementById('analytics-tags-all');
+  if (scopeLabel) {
+    scopeLabel.textContent = state.analyticsStrategyId
+      ? `· de ${strategyNameOf({ strategyId: state.analyticsStrategyId })}`
+      : '· de todas las estrategias';
   }
-  const trades = state.analyticsTags.length > 0 
-    ? state.trades.filter(t => state.analyticsTags.every(tag => (t.tags || []).includes(tag)))
+  if (allBtn) {
+    allBtn.classList.toggle('active', state.analyticsTags.length === 0);
+    allBtn.onclick = () => { if (state.analyticsTags.length) { state.analyticsTags = []; renderAnalytics(); } };
+  }
+  if (!wrap) return;
+  let tagNames;
+  if (state.analyticsStrategyId) {
+    tagNames = activeTagNames(state.analyticsStrategyId);
+  } else {
+    const set = new Set();
+    state.strategyTags.filter(x => !x.deleted).forEach(x => set.add(x.name));
+    tagNames = [...set];
+  }
+  tagNames = [...tagNames].sort((a, b) => a.localeCompare(b));
+  if (!tagNames.length) {
+    wrap.innerHTML = '<div class="picker-empty">Esta estrategia todavía no tiene etiquetas.</div>';
+    return;
+  }
+  wrap.innerHTML = tagNames.map(tag => {
+    const rows = scopedTrades.filter(t => (t.tags || []).some(x => x.toUpperCase() === tag.toUpperCase()));
+    const mm = computeMetrics(rows);
+    const selected = state.analyticsTags.some(x => x.toUpperCase() === tag.toUpperCase());
+    return `<button type="button" class="tag-row ${selected ? 'selected' : ''}" data-tag="${esc(tag)}">
+      <span class="tag-row-check">${selected ? '✓' : ''}</span>
+      <span class="tag-row-name">${esc(tag)}</span>
+      <span class="tag-row-stats"><span>${rows.length} trades</span><span>WR <strong>${mm.winRate !== null ? fmtPct(mm.winRate) : 'N/A'}</strong></span><span>P&L <strong class="${colorClass(mm.totalPnl)}">${fmtPnl(mm.totalPnl)}</strong></span></span>
+    </button>`;
+  }).join('');
+  wrap.querySelectorAll('.tag-row').forEach(btn => btn.addEventListener('click', () => {
+    const tag = btn.dataset.tag.toUpperCase();
+    if (state.analyticsTags.some(x => x.toUpperCase() === tag)) {
+      state.analyticsTags = state.analyticsTags.filter(x => x.toUpperCase() !== tag);
+    } else {
+      state.analyticsTags.push(tag);
+    }
+    renderAnalytics();
+  }));
+}
+
+function renderAnalytics() {
+  renderStrategyPicker('analytics-strategy-picker', {
+    trades: state.trades,
+    selectedId: state.analyticsStrategyId,
+    onSelect: id => {
+      state.analyticsStrategyId = state.analyticsStrategyId === id ? '' : id;
+      state.analyticsTags = []; // al cambiar de estrategia, la combinación se limpia
+      renderAnalytics();
+    }
+  });
+  // Alcance: primero la estrategia elegida; las etiquetas se combinan (AND)
+  // dentro de ese alcance. Sin estrategia: todas, y las etiquetas son las de
+  // todas las estrategias.
+  let trades = state.analyticsStrategyId
+    ? state.trades.filter(t => t.strategyId === state.analyticsStrategyId)
     : state.trades;
+  renderAnalyticsTagRows(trades);
+  if (state.analyticsTags.length > 0)
+    trades = trades.filter(t => state.analyticsTags.every(tag => (t.tags || []).some(x => x.toUpperCase() === tag.toUpperCase())));
+  state.analyticsScope = trades;
   const m=computeMetrics(trades);
 
   // ── MAPPING DE CARTAS ──
@@ -1248,14 +1735,14 @@ function renderAnalytics() {
     wlGrid.style.marginBottom='24px';
     wlGrid.innerHTML=`
     <div class="wl-card">
-      <div class="wl-title" style="color:var(--green)">✅ Ganadores</div>
+      <div class="wl-title" style="color:var(--green)">Ganadores</div>
       <div class="wl-row"><span class="wl-key">Total</span><span class="wl-val">${m.wins.length}</span></div>
       <div class="wl-row"><span class="wl-key">Mejor ganancia</span><span class="wl-val positive">${m.bestTrade!==null&&m.bestTrade>0?fmtPnl(m.bestTrade):'—'}</span></div>
       <div class="wl-row"><span class="wl-key">Promedio ganancia</span><span class="wl-val positive">${m.avgWin>0?fmtPnl(m.avgWin):'—'}</span></div>
       <div class="wl-row"><span class="wl-key">Racha máx. ganadora</span><span class="wl-val">${m.bestStreak}</span></div>
     </div>
     <div class="wl-card">
-      <div class="wl-title" style="color:var(--red)">❌ Perdedores</div>
+      <div class="wl-title" style="color:var(--red)">Perdedores</div>
       <div class="wl-row"><span class="wl-key">Total</span><span class="wl-val">${m.losses.length}</span></div>
       <div class="wl-row"><span class="wl-key">Peor pérdida</span><span class="wl-val negative">${m.worstTrade!==null&&m.worstTrade<0?fmtPnl(m.worstTrade):'—'}</span></div>
       <div class="wl-row"><span class="wl-key">Promedio pérdida</span><span class="wl-val negative">${m.avgLoss>0?'-'+m.avgLoss.toFixed(2)+' $':'—'}</span></div>
@@ -1408,9 +1895,10 @@ function renderPerfCalendar(trades){
   const wrap=document.getElementById('perf-calendar-wrap'); if(!wrap)return;
   const byDay={};
   trades.forEach(t=>{
-    if(!byDay[t.date]) byDay[t.date]={ pnl:0, hasBe:false, hasTrades:false };
+    if(!byDay[t.date]) byDay[t.date]={ pnl:0, hasBe:false, hasTrades:false, count:0 };
     byDay[t.date].pnl+=t.pnl;
     byDay[t.date].hasTrades=true;
+    byDay[t.date].count++;
     if(t.result==='BE') byDay[t.date].hasBe=true;
   });
   if(Object.keys(byDay).length===0){wrap.innerHTML='<div class="empty-state" style="padding:24px">Sin datos</div>';return;}
@@ -1428,14 +1916,14 @@ function renderPerfCalendar(trades){
     if(!day)cells+=`<div class="cal-day no-data"><span class="cal-num">${d}</span></div>`;
     else {
       const cls = day.hasBe ? 'be' : (day.pnl>=0 ? 'pos' : 'neg');
-      const pnlLabel = day.pnl>=0?'+':''; 
-      cells+=`<div class="cal-day ${cls}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnlLabel}${day.pnl.toFixed(0)}$</span></div>`;
+      const pnlLabel = day.pnl>=0?'+':'';
+      cells+=`<div class="cal-day ${cls}"><span class="cal-num">${d}</span><span class="cal-pnl">${pnlLabel}${day.pnl.toFixed(0)}$</span><span class="cal-count">${day.count} trade${day.count===1?'':'s'}</span></div>`;
     }
   }
   wrap.innerHTML=`<div class="calendar-month">
       <div class="perf-calendar">
-        <div class="cal-header">Lun</div><div class="cal-header">Mar</div><div class="cal-header">Mi?</div>
-        <div class="cal-header">Jue</div><div class="cal-header">Vie</div><div class="cal-header">S?b</div><div class="cal-header">Dom</div>
+        <div class="cal-header">Lun</div><div class="cal-header">Mar</div><div class="cal-header">Mié</div>
+        <div class="cal-header">Jue</div><div class="cal-header">Vie</div><div class="cal-header">Sáb</div><div class="cal-header">Dom</div>
         ${cells}
       </div></div>`;
 }
@@ -1488,7 +1976,7 @@ function renderMonthChart(trades){
 
 function bindMonthYearFilter(){
   const sel=document.getElementById('month-chart-year');
-  if(sel)sel.addEventListener('change',()=>renderMonthChart(state.trades));
+  if(sel)sel.addEventListener('change',()=>renderMonthChart(state.analyticsScope || state.trades));
 }
 
 function barChart(ctx,labels,data,label){
@@ -1525,7 +2013,7 @@ function bindNoteForm(){
 
 function renderNotes(){
   const container=document.getElementById('notes-list');
-  if(state.notes.length===0){container.innerHTML='<div class="empty-state"><div class="empty-state-icon">📝</div>No hay notas aún</div>';return;}
+  if(state.notes.length===0){container.innerHTML='<div class="empty-state">No hay notas aún</div>';return;}
   let html='';
   for(const n of state.notes){
     const date=fmtDateTime(n.date);
@@ -1535,11 +2023,11 @@ function renderNotes(){
       linksHtml='<div class="note-links" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">';
       n.links.forEach((l,i)=>{
         const url=esc(l);
-        linksHtml+='<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px solid rgba(100,200,255,.3);color:#64c8ff;padding:4px 12px;border-radius:6px;text-decoration:none;font-size:.75rem;transition:all .2s" onmouseover="this.style.background=\'rgba(100,200,255,.1)\'" onmouseout="this.style.background=\'transparent\'">🔗 Link '+(i+1)+'</a>';
+        linksHtml+='<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px solid rgba(100,200,255,.3);color:#64c8ff;padding:4px 12px;border-radius:6px;text-decoration:none;font-size:.75rem;transition:all .2s" onmouseover="this.style.background=\'rgba(100,200,255,.1)\'" onmouseout="this.style.background=\'transparent\'">Link '+(i+1)+'</a>';
       });
       linksHtml+='</div>';
     }
-    html+='<div class="note-item"><div class="note-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="note-date">'+date+'</span><button class="btn-note-delete" data-note-id="'+n.id+'" style="background:transparent;border:1px solid var(--border,#444);color:var(--text-muted,#888);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:all .2s" onmouseover="this.style.borderColor=\'var(--red,#f44336)\';this.style.color=\'var(--red,#f44336)\'" onmouseout="this.style.borderColor=\'var(--border,#444)\';this.style.color=\'var(--text-muted,#888)\'">🗑️ Borrar</button></div><div class="note-text">'+text+'</div>'+linksHtml+'</div>';
+    html+='<div class="note-item"><div class="note-item-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="note-date">'+date+'</span><button class="btn-note-delete" data-note-id="'+n.id+'" style="background:transparent;border:1px solid var(--border,#444);color:var(--text-muted,#888);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:all .2s" onmouseover="this.style.borderColor=\'var(--red,#f44336)\';this.style.color=\'var(--red,#f44336)\'" onmouseout="this.style.borderColor=\'var(--border,#444)\';this.style.color=\'var(--text-muted,#888)\'">Borrar</button></div><div class="note-text">'+text+'</div>'+linksHtml+'</div>';
   }
   container.innerHTML=html;
   container.querySelectorAll('.btn-note-delete').forEach(btn=>{
@@ -1580,10 +2068,10 @@ function bindCloudUI(){
 }
 
 function syncPhaseMap(phase){
-  if(!phase||['not-started','offline','disconnected','error'].includes(phase))return{text:'Offline',cls:'sync-offline',emoji:'🔴'};
-  if(['connecting','pushing','pulling'].includes(phase))return{text:'Sincronizando...',cls:'sync-syncing',emoji:'🟡'};
-  if(['in-sync','connected'].includes(phase))return{text:'Sincronizado',cls:'sync-ok',emoji:'🟢'};
-  return{text:'Offline',cls:'sync-offline',emoji:'🔴'};
+  if(!phase||['not-started','offline','disconnected','error'].includes(phase))return{text:'Offline',cls:'sync-offline'};
+  if(['connecting','pushing','pulling'].includes(phase))return{text:'Sincronizando...',cls:'sync-syncing'};
+  if(['in-sync','connected'].includes(phase))return{text:'Sincronizado',cls:'sync-ok'};
+  return{text:'Offline',cls:'sync-offline'};
 }
 
 function updateSyncBadge(phase) {
@@ -1592,8 +2080,9 @@ function updateSyncBadge(phase) {
   if (badge) {
     const inApp = document.getElementById('app-screen')?.style.display !== 'none';
     // En pantalla de inicio (mode-screen): mostrar texto
-    // En app: mostrar solo emoji
-    badge.textContent = inApp ? ui.emoji : ui.text;
+    // En app: mostrar solo el punto de estado (sin emojis)
+    if (inApp) badge.innerHTML = `<span class="sync-dot ${ui.cls}"></span>`;
+    else badge.textContent = ui.text;
     badge.className = 'sync-badge ' + ui.cls;
     badge.title = ui.text;
   }
@@ -1618,17 +2107,40 @@ function esc(str){return String(str??'').replace(/&/g,'&amp;').replace(/</g,'&lt
 function groupBy(arr,fn){return arr.reduce((acc,item)=>{const k=fn(item);if(!acc[k])acc[k]=[];acc[k].push(item);return acc;},{});}
 function isoWeek(dateStr){const d=new Date(dateStr+'T12:00:00');const jan4=new Date(d.getFullYear(),0,4);const week1=new Date(jan4.getTime()-(jan4.getDay()||7-1)*86400000);return d.getFullYear()+'-W'+String(Math.ceil((d-week1)/(7*86400000))).padStart(2,'0');}
 function setEl(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls)el.className='card-value '+cls;}
+function setText(id,val,cls){const el=document.getElementById(id);if(!el)return;el.textContent=val;if(cls){el.classList.remove('positive','negative','neutral');el.classList.add(cls);}}
 
 // ── INSIGHTS ───────────────────────────────────────────────────────────────────
 async function renderInsights() {
   const container = document.getElementById('insights-content');
   if (!container) return;
 
+  renderStrategyPicker('insights-strategy-picker', {
+    trades: state.trades,
+    selectedId: state.insightsStrategyId,
+    onSelect: id => {
+      state.insightsStrategyId = state.insightsStrategyId === id ? '' : id;
+      renderInsights();
+    }
+  });
+  const scopeLabel = document.getElementById('insights-scope-label');
+  if (scopeLabel) {
+    scopeLabel.textContent = state.insightsStrategyId
+      ? `Viendo solo la estrategia: ${strategyNameOf({ strategyId: state.insightsStrategyId })}`
+      : 'Sin estrategia elegida: paneo general de todas.';
+  }
+
   container.innerHTML = '<div style="text-align:center;padding:40px"><div style="font-size:1.2rem;color:var(--text-muted)">Generando insights...</div></div>';
 
   try {
-    const data = await generateTradeInsights(state.mode);
+    const data = await generateTradeInsights(state.mode, state.insightsStrategyId || null);
     container.innerHTML = buildInsightsHTML(data);
+    container.querySelectorAll('[data-panorama-strategy]').forEach(row => {
+      row.addEventListener('click', () => {
+        if (!row.dataset.panoramaStrategy) return;
+        state.insightsStrategyId = row.dataset.panoramaStrategy;
+        renderInsights();
+      });
+    });
   } catch (err) {
     console.error('[renderInsights] Error:', err);
     container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)"><div style="font-size:1.2rem">Error generando insights: ${err.message}</div></div>`;
@@ -1636,11 +2148,10 @@ async function renderInsights() {
 }
 
 function buildInsightsHTML(data) {
-  const { mode, insights, warnings, strengths, metrics, tagCombos, tagSynergies, singleTags, killZones, smt, symbols, daysOfWeek } = data;
+  const { mode, insights, warnings, strengths, metrics, tagCombos, tagSynergies, singleTags, killZones, smt, symbols, daysOfWeek, panorama } = data;
 
   if (!metrics) {
     return `<div class="mode-stat-card" style="text-align:center">
-      <div class="empty-state-icon">🤖</div>
       <h3 style="margin:16px 0 8px">Sin datos para analizar</h3>
       <p style="color:var(--text-muted)">Registra trades en ${mode} para ver insights automáticos.</p>
     </div>`;
@@ -1660,20 +2171,38 @@ function buildInsightsHTML(data) {
     </div>
   `;
 
+  // Paneo por estrategia (solo en la vista general, sin estrategia elegida):
+  // una fila por estrategia; al tocarla se ven sus insights en detalle.
+  if (panorama && panorama.length > 0) {
+    html += `
+      <div class="mode-stat-card" style="margin-bottom:24px">
+        <div class="card-label" style="margin-bottom:16px">Paneo por estrategia</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${panorama.map(p => `
+            <button type="button" class="panorama-row" data-panorama-strategy="${p.strategyId || ''}">
+              <span class="panorama-name">${esc(p.name)}</span>
+              <span class="panorama-stats"><span>${p.count} trades</span><span>WR <strong>${p.winRate ? p.winRate.toFixed(1) + '%' : 'N/A'}</strong></span><span>P&L <strong class="${colorClass(p.totalPnl)}">${fmtPnl(p.totalPnl)}</strong></span></span>
+              <span class="panorama-tags">${p.strongTag ? `<span>Fuerte en <strong>${esc(p.strongTag)}</strong></span>` : ''}${p.weakTag ? `<span>A vigilar <strong>${esc(p.weakTag)}</strong></span>` : ''}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   // Fortalezas
   if (strengths.length > 0) {
     html += `
       <div class="mode-stat-card" style="margin-bottom:24px">
-        <div class="card-label" style="color:var(--green);margin-bottom:16px">✅ Fortalezas Detectadas</div>
+        <div class="card-label" style="color:var(--green);margin-bottom:16px">Fortalezas Detectadas</div>
         <div style="display:flex;flex-direction:column;gap:12px">
           ${strengths.map(s => `
             <div style="background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:12px;padding:16px">
               <div style="display:flex;align-items:flex-start;gap:12px">
-                <span style="font-size:1.5rem">${s.icon}</span>
+                <span class="insight-glyph glyph-ok">✓</span>
                 <div style="flex:1">
                   <div style="font-weight:600;font-size:1rem">${s.title}</div>
                   <div style="color:var(--text-muted);margin:4px 0">${s.message}</div>
-                  <div style="font-size:0.85rem;color:var(--green);margin-top:8px">💡 ${s.recommendation}</div>
+                  <div style="font-size:0.85rem;color:var(--green);margin-top:8px">Recomendación: ${s.recommendation}</div>
                 </div>
               </div>
             </div>
@@ -1687,16 +2216,16 @@ function buildInsightsHTML(data) {
   if (warnings.length > 0) {
     html += `
       <div class="mode-stat-card" style="margin-bottom:24px">
-        <div class="card-label" style="color:var(--red);margin-bottom:16px">⚠️ Áreas de Mejora</div>
+        <div class="card-label" style="color:var(--red);margin-bottom:16px">Áreas de Mejora</div>
         <div style="display:flex;flex-direction:column;gap:12px">
           ${warnings.map(w => `
             <div style="background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.3);border-radius:12px;padding:16px">
               <div style="display:flex;align-items:flex-start;gap:12px">
-                <span style="font-size:1.5rem">${w.icon}</span>
+                <span class="insight-glyph glyph-warn">!</span>
                 <div style="flex:1">
                   <div style="font-weight:600;font-size:1rem">${w.title}</div>
                   <div style="color:var(--text-muted);margin:4px 0">${w.message}</div>
-                  <div style="font-size:0.85rem;color:var(--red);margin-top:8px">🔧 ${w.recommendation}</div>
+                  <div style="font-size:0.85rem;color:var(--red);margin-top:8px">Recomendación: ${w.recommendation}</div>
                 </div>
               </div>
             </div>
@@ -1710,16 +2239,16 @@ function buildInsightsHTML(data) {
   if (insights.length > 0) {
     html += `
       <div class="mode-stat-card" style="margin-bottom:24px">
-        <div class="card-label" style="color:var(--blue);margin-bottom:16px">💡 Insights</div>
+        <div class="card-label" style="color:var(--blue);margin-bottom:16px">Insights</div>
         <div style="display:flex;flex-direction:column;gap:12px">
           ${insights.map(i => `
             <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:12px;padding:16px">
               <div style="display:flex;align-items:flex-start;gap:12px">
-                <span style="font-size:1.5rem">${i.icon}</span>
+                <span class="insight-glyph glyph-info">i</span>
                 <div style="flex:1">
                   <div style="font-weight:600;font-size:1rem">${i.title}</div>
                   <div style="color:var(--text-muted);margin:4px 0">${i.message}</div>
-                  <div style="font-size:0.85rem;color:var(--blue);margin-top:8px">💡 ${i.recommendation}</div>
+                  <div style="font-size:0.85rem;color:var(--blue);margin-top:8px">Recomendación: ${i.recommendation}</div>
                 </div>
               </div>
             </div>
@@ -1734,7 +2263,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          🏷️ Top Combinaciones de Tags (min 3 trades)
+          Top Combinaciones de Tags (min 3 trades)
         </summary>
         <div style="margin-top:16px;overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
@@ -1771,7 +2300,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          🔗 Sinergias Detectadas (tags que funcionan mejor juntos)
+          Sinergias Detectadas (tags que funcionan mejor juntos)
         </summary>
         <div style="margin-top:16px">
           ${tagSynergies.map(s => `
@@ -1793,7 +2322,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          📊 Tags Individuales
+          Tags Individuales
         </summary>
         <div style="margin-top:16px;overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
@@ -1832,7 +2361,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          🕐 Por Kill Zone
+          Por Kill Zone
         </summary>
         <div style="margin-top:16px;overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
@@ -1871,7 +2400,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          🧠 Con vs Sin SMT
+          Con vs Sin SMT
         </summary>
         <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <div style="background:rgba(215,201,174,0.1);border:1px solid rgba(215,201,174,0.3);border-radius:8px;padding:16px">
@@ -1892,7 +2421,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          📈 Por Símbolo
+          Por Símbolo
         </summary>
         <div style="margin-top:16px;overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
@@ -1929,7 +2458,7 @@ function buildInsightsHTML(data) {
     html += `
       <details class="mode-stat-card" style="margin-bottom:24px">
         <summary class="card-label" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-          📅 Por Día de la Semana
+          Por Día de la Semana
         </summary>
         <div style="margin-top:16px;overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
@@ -1994,7 +2523,8 @@ function resolveImageUrl(url) {
   return u;
 }
 
-// Junta las 3 imágenes de cada trade, sin duplicados por URL resuelta.
+// Junta las imágenes por LINK de cada trade, sin duplicados por URL resuelta.
+// Las subidas como archivo (blobs) no se incluyen: ya viven en el dispositivo.
 function collectTradeImageEntries(trades) {
   const seen = new Set();
   const out = [];
@@ -2006,18 +2536,39 @@ function collectTradeImageEntries(trades) {
       seen.add(resolved);
       out.push({ tradeId: t && t.id, label: f.label, raw: String(raw).trim(), resolved });
     });
+    (t && t.extraImages || []).forEach(x => {
+      const raw = x ? x.url : '';
+      const resolved = resolveImageUrl(raw);
+      if (!resolved || seen.has(resolved)) return;
+      seen.add(resolved);
+      out.push({ tradeId: t && t.id, label: x.title || 'Imagen', raw: String(raw).trim(), resolved });
+    });
   });
   return out;
 }
 
-// Botones que abren la imagen en el visor interno (funciona offline vía caché).
+// Botones que abren la imagen en el visor interno (funciona offline vía caché
+// para links; directo desde IndexedDB para archivos subidos).
 function tradeImageButtons(t, extraClass) {
   const cls = extraClass ? `img-open-btn ${extraClass}` : 'img-open-btn';
-  return IMAGE_FIELDS
-    .map(f => t[f.key]
-      ? `<button type="button" class="${cls}" data-raw="${esc(t[f.key])}" data-label="${esc(f.label)}">📷 ${esc(f.label)}</button>`
-      : '')
-    .filter(Boolean).join('');
+  const parts = [];
+  IMAGE_FIELDS.forEach(f => {
+    const blobKey = f.key.replace('Url', 'Blob');
+    if (t[blobKey]) {
+      parts.push(`<button type="button" class="${cls}" data-trade="${t.id}" data-blob-field="${blobKey}" data-label="${esc(f.label)}">${esc(f.label)}</button>`);
+    } else if (t[f.key]) {
+      parts.push(`<button type="button" class="${cls}" data-raw="${esc(t[f.key])}" data-label="${esc(f.label)}">${esc(f.label)}</button>`);
+    }
+  });
+  (t.extraImages || []).forEach(x => {
+    const label = x.title || 'Imagen';
+    if (x.blob) {
+      parts.push(`<button type="button" class="${cls}" data-trade="${t.id}" data-extra-id="${esc(x.id)}" data-label="${esc(label)}">${esc(label)}</button>`);
+    } else if (x.url) {
+      parts.push(`<button type="button" class="${cls}" data-raw="${esc(x.url)}" data-label="${esc(label)}">${esc(label)}</button>`);
+    }
+  });
+  return parts.join('');
 }
 
 function ensureLightbox() {
@@ -2045,10 +2596,18 @@ function ensureLightbox() {
 function openImageLightbox(rawUrl, label) {
   const resolved = resolveImageUrl(rawUrl);
   if (!resolved) return;
+  openImageLightboxSrc(resolved, label, rawUrl);
+}
+
+// Abre el visor con una fuente ya resuelta (URL directa u object URL de un
+// Blob subido). origHref vacío oculta el enlace "abrir original".
+function openImageLightboxSrc(src, label, origHref) {
   const lb = ensureLightbox();
   document.getElementById('img-lightbox-label').textContent = label || 'Imagen';
-  document.getElementById('img-lightbox-img').src = resolved;
-  document.getElementById('img-lightbox-orig').href = rawUrl;
+  document.getElementById('img-lightbox-img').src = src;
+  const orig = document.getElementById('img-lightbox-orig');
+  if (origHref) { orig.href = origHref; orig.style.display = ''; }
+  else { orig.style.display = 'none'; }
   lb.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -2063,7 +2622,25 @@ function bindImageLightboxButtons(root) {
   (root || document).querySelectorAll('.img-open-btn').forEach(btn => {
     if (btn._lbBound) return;
     btn._lbBound = true;
-    btn.addEventListener('click', () => openImageLightbox(btn.dataset.raw, btn.dataset.label));
+    btn.addEventListener('click', () => {
+      // Imagen subida como archivo: el Blob vive en el registro del trade.
+      if (btn.dataset.blobField || btn.dataset.extraId) {
+        const t = state.trades.find(x => x.id === btn.dataset.trade)
+          || (state.allBtTrades || []).find(x => x.id === btn.dataset.trade)
+          || (state.allLiveTrades || []).find(x => x.id === btn.dataset.trade);
+        if (!t) return;
+        let blob = null, orig = '';
+        if (btn.dataset.blobField) {
+          blob = t[btn.dataset.blobField];
+        } else {
+          const x = (t.extraImages || []).find(e => e.id === btn.dataset.extraId);
+          if (x) { blob = x.blob; orig = x.url || ''; }
+        }
+        if (blob) openImageLightboxSrc(URL.createObjectURL(blob), btn.dataset.label, orig);
+        return;
+      }
+      openImageLightbox(btn.dataset.raw, btn.dataset.label);
+    });
   });
 }
 
@@ -2154,7 +2731,7 @@ function renderOfflineCard() {
   const d = new Date(m.date);
   const fecha = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' +
     d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-  box.innerHTML = `✅ <strong>${m.ok}</strong> imágenes listas para ver sin internet ` +
+  box.innerHTML = `<strong>${m.ok}</strong> imágenes listas para ver sin internet ` +
     `<span style="color:var(--text-muted)">(preparado el ${fecha}${m.fail ? ` · ${m.fail} fallaron` : ''})</span>`;
 }
 

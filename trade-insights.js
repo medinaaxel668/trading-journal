@@ -220,14 +220,46 @@ function analyzeTagSynergies(trades, minCount = 3) {
   return synergies.filter(s => s.isPositive).sort((a, b) => b.synergy - a.synergy);
 }
 
-export async function generateTradeInsights(mode = 'backtest') {
+// Paneo por estrategia para la vista general de Insights (sin estrategia
+// elegida): trades, WR, P&L y la etiqueta más fuerte / más floja de cada una.
+function buildStrategyPanorama(trades) {
+  const byStrat = new Map();
+  for (const t of trades) {
+    const key = t.strategyId || ('name:' + (t.strategyName || ''));
+    if (!key || key === 'name:') continue;
+    if (!byStrat.has(key)) byStrat.set(key, { strategyId: t.strategyId || null, name: t.strategyName || 'Sin estrategia', trades: [] });
+    byStrat.get(key).trades.push(t);
+  }
+  return [...byStrat.values()].map(g => {
+    const m = computeTradeMetrics(g.trades);
+    const tagStats = Array.from(groupBySingleTag(g.trades).entries())
+      .map(([tag, d]) => ({ tag, count: d.count, totalPnl: d.totalPnl, winRate: d.wins + d.losses > 0 ? (d.wins / (d.wins + d.losses)) * 100 : 0 }))
+      .filter(x => x.count >= 3);
+    const strong = tagStats.length ? [...tagStats].sort((a, b) => b.winRate - a.winRate)[0] : null;
+    const weak = tagStats.length ? [...tagStats].sort((a, b) => a.winRate - b.winRate)[0] : null;
+    return {
+      strategyId: g.strategyId, name: g.name,
+      count: m ? m.totalCount : g.trades.length,
+      winRate: m ? m.winRate : 0, totalPnl: m ? m.totalPnl : 0,
+      strongTag: strong ? strong.tag : null, weakTag: weak ? weak.tag : null
+    };
+  }).sort((a, b) => b.totalPnl - a.totalPnl);
+}
+
+export async function generateTradeInsights(mode = 'backtest', strategyId = null) {
   const getTrades = mode === 'live' ? getAllLiveTrades : getAllTrades;
-  const trades = await getTrades().catch(() => []);
+  const allTrades = await getTrades().catch(() => []);
   const label = mode === 'live' ? 'Live' : 'Backtesting';
+  // Rediseño 2026-11: con una estrategia elegida, TODO se calcula solo con sus
+  // trades. Sin selección: vista general + paneo por estrategia.
+  const trades = strategyId ? allTrades.filter(t => t.strategyId === strategyId) : allTrades;
+  const panorama = strategyId ? [] : buildStrategyPanorama(allTrades);
 
   if (!trades.length) {
     return {
       mode: label,
+      strategyId,
+      panorama,
       insights: [{ type: 'info', title: 'Sin datos', message: `No hay trades registrados en ${label}.`, recommendation: 'Registra trades para ver insights.' }],
       warnings: [],
       strengths: [],
@@ -526,6 +558,8 @@ export async function generateTradeInsights(mode = 'backtest') {
 
   return {
     mode: label,
+    strategyId,
+    panorama,
     insights,
     warnings,
     strengths,

@@ -17,7 +17,7 @@
   </div>
 
   <script>
-    const APP_STORES = ['trades', 'notes', 'liveTrades', 'liveNotes'];
+    const APP_STORES = ['trades', 'notes', 'liveTrades', 'liveNotes', 'strategies', 'strategyTags'];
     const KNOWN_DBS = ['tradingAppDB', 'tradingAppDB-zo8mhffzq', 'tradingAppDB-zs0gyiyrz'];
     const status = document.getElementById('status');
     const btn = document.getElementById('btn-export');
@@ -25,7 +25,7 @@
     const backup = {
       meta: {
         app: 'trading-journal',
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         origin: location.origin
       },
@@ -122,7 +122,39 @@
       }
     }
 
-    btn.onclick = () => {
+    // Las imágenes subidas como archivo viven como Blob en IndexedDB:
+    // para que el backup JSON las conserve, se codifican en base64.
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function encodeBlobs(items) {
+      for (const item of items) {
+        for (const field of ['tradingViewBlob', 'imageM3Blob', 'imageM15Blob']) {
+          if (item[field] instanceof Blob) {
+            item[field] = { __blob: true, type: item[field].type || 'image/png', data: await blobToBase64(item[field]) };
+          }
+        }
+        if (Array.isArray(item.extraImages)) {
+          for (const x of item.extraImages) {
+            if (x && x.blob instanceof Blob) {
+              x.blob = { __blob: true, type: x.blob.type || 'image/png', data: await blobToBase64(x.blob) };
+            }
+          }
+        }
+      }
+    }
+
+    btn.onclick = async () => {
+      btn.disabled = true;
+      status.textContent = 'Preparando el archivo (codificando imágenes subidas)...';
+      await encodeBlobs(backup.stores.trades);
+      await encodeBlobs(backup.stores.liveTrades);
       const json = JSON.stringify(backup, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const link = document.createElement('a');

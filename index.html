@@ -48,56 +48,34 @@
       </div>
     </div>
 
-    <div class="mode-stats-grid">
-      <div class="mode-stat-card">
-        <div class="mode-stat-label">P&L Global</div>
-        <div id="ms-pnl" class="mode-stat-value">---</div>
-      </div>
+    <div class="mode-home-grid">
       <div class="mode-stat-card">
         <div class="mode-stat-label">Win Rate</div>
         <div id="ms-wr" class="mode-stat-value">---</div>
-        <div class="mode-stat-sub">excl. BE</div>
+        <div class="mode-stat-sub">global · excl. BE · <span id="ms-total-count">0</span> trades</div>
       </div>
-      <div class="mode-stat-card">
-        <div class="mode-stat-label">Backtesting</div>
-        <div id="ms-bt-count" class="mode-stat-value">---</div>
-        <div class="mode-stat-sub">trades</div>
+      <div class="mode-card-item" onclick="enterMode('backtest')">
+        <div class="mode-preview"><canvas id="preview-bt"></canvas></div>
+        <h3 class="mode-title">Backtesting</h3>
+        <div class="mode-card-stats">Trades <strong id="mc-bt-count">0</strong> | P&amp;L <strong id="mc-bt-pnl">0</strong> | WR <strong id="mc-bt-wr">0</strong> | Mejor racha <strong id="mc-bt-best">0</strong> | Peor racha <strong id="mc-bt-worst">0</strong></div>
+        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Backtesting →</button>
       </div>
-      <div class="mode-stat-card">
-        <div class="mode-stat-label">Live</div>
-        <div id="ms-live-count" class="mode-stat-value">---</div>
-        <div class="mode-stat-sub">trades</div>
+      <div class="mode-card-item" onclick="enterMode('live')">
+        <div class="mode-preview"><canvas id="preview-live"></canvas></div>
+        <h3 class="mode-title">Trading en Vivo</h3>
+        <div class="mode-card-stats">Trades <strong id="mc-live-count">0</strong> | P&amp;L <strong id="mc-live-pnl">0</strong> | WR <strong id="mc-live-wr">0</strong> | Mejor racha <strong id="mc-live-best">0</strong> | Peor racha <strong id="mc-live-worst">0</strong></div>
+        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Live →</button>
       </div>
-      <div class="mode-stat-card">
-        <div class="mode-stat-label">Challenge</div>
-        <div id="ms-ch-count" class="mode-stat-value">---</div>
-       <div class="mode-stat-sub">pruebas</div>
+      <div class="mode-card-item" onclick="enterMode('challenge')">
+        <div class="mode-preview mode-preview-challenge"><span>Challenge</span></div>
+        <h3 class="mode-title">Challenge</h3>
+        <div class="mode-card-stats">Pruebas <strong id="mc-ch-count">0</strong> | Retiros <strong id="mc-ch-withdrawals">0</strong> | ROI <strong id="mc-ch-roi">0%</strong></div>
+        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Challenge →</button>
       </div>
     </div>
 
-      <div class="modes-grid">
-        <div class="mode-card-item" onclick="enterMode('backtest')">
-          <div class="mode-preview"><canvas id="preview-bt"></canvas></div>
-          <h3 class="mode-title">Backtesting</h3>
-          <p class="mode-desc">Analizá trades históricos y perfeccioná tu estrategia.</p>
-          <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-bt-count">0</span> | P&L: <span id="mc-bt-pnl">0</span> | WR: <span id="mc-bt-wr">0</span></div>
-          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Backtesting →</button>
-        </div>
-        <div class="mode-card-item" onclick="enterMode('live')">
-          <div class="mode-preview"><canvas id="preview-live"></canvas></div>
-          <h3 class="mode-title">Trading en Vivo</h3>
-          <p class="mode-desc">Registrá tus sesiones reales y analizá tu psicología.</p>
-          <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-live-count">0</span> | P&L: <span id="mc-live-pnl">0</span> | WR: <span id="mc-live-wr">0</span></div>
-          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Live →</button>
-        </div>
-          <div class="mode-card-item" onclick="enterMode('challenge')">
-          <div class="mode-preview" style="display:flex;align-items:center;justify-content:center;font-size:4rem;background:linear-gradient(135deg, rgba(215,201,174,.1), rgba(215,201,174,.05))">🏆</div>
-          <h3 class="mode-title">Challenge</h3>
-          <p class="mode-desc">Exámenes de fondeo, conversión a retiros, ROI y comparativa simulado vs real.</p>
-          <div class="mode-stat-label" style="margin-top: 10px;">Pruebas: <span id="mc-ch-count">0</span> | Retiros: <span id="mc-ch-withdrawals">0</span> | ROI: <span id="mc-ch-roi">0%</span></div>
-          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Challenge →</button>
-        </div>
-      </div>
+    <div class="mode-section-title">Estrategias</div>
+    <div id="mode-strategies" class="mode-strategies-grid"></div>
 
       <details id="data-diagnostic-panel" class="diagnostic-panel">
         <summary class="diagnostic-summary">
@@ -141,7 +119,7 @@
         <button class="tab-btn" data-tab="history">Historial</button>
         <button class="tab-btn" data-tab="analytics">Analytics</button>
         <button class="tab-btn" data-tab="notes">Notas</button>
-        <button class="tab-btn" data-tab="insights">🤖 Insights</button>
+        <button class="tab-btn" data-tab="insights">Insights</button>
       </nav>
       <div class="mode-user-info">
         <button type="button" id="theme-toggle" class="icon-toggle" data-theme-toggle aria-label="Cambiar tema"></button>
@@ -157,6 +135,8 @@
   <main class="content" style="max-width:1200px;margin:32px auto;padding:0 20px">
     <!-- DASHBOARD -->
     <section id="tab-dashboard" class="tab-section active">
+      <div class="section-subtitle">Elige una estrategia</div>
+      <div id="dashboard-strategy-picker" class="strategy-picker"></div>
       <div class="mode-stats-grid">
         <div class="card"><div class="card-label">P&L Total</div><div id="stat-pnl" class="card-value">---</div></div>
         <div class="card"><div class="card-label">Win Rate</div><div id="stat-wr" class="card-value">---</div><div class="card-sub">excl. BE</div></div>
@@ -174,9 +154,9 @@
         <div id="recent-trades" style="text-align:left;"></div>
       </div>
       <div class="mode-stat-card" style="margin-top:24px;padding:32px;text-align:left">
-        <div class="card-label" style="text-align:left;margin-bottom:8px;">✈️ Modo viaje sin internet</div>
-        <p style="color:var(--text-muted);font-size:.85rem;margin:0 0 12px">Descarga las imágenes de entrada (M1), M3 y M15 de todos tus trades (backtest y live) para verlas sin conexión.</p>
-        <button type="button" id="btn-prepare-offline" class="btn-enter-mode" style="width:auto;padding:10px 20px">📥 Preparar imágenes para el viaje</button>
+        <div class="card-label" style="text-align:left;margin-bottom:8px;">Modo viaje sin internet</div>
+        <p style="color:var(--text-muted);font-size:.85rem;margin:0 0 12px">Descarga las imágenes de entrada (M1), M3 y M15 de todos tus trades (backtest y live) para verlas sin conexión. Las imágenes que subís como archivo ya quedan guardadas en el dispositivo y no necesitan descarga.</p>
+        <button type="button" id="btn-prepare-offline" class="btn-enter-mode" style="width:auto;padding:10px 20px">Preparar imágenes para el viaje</button>
         <div id="offline-progress" style="margin-top:12px;display:none">
           <div class="progress-track"><div id="offline-progress-bar" class="progress-bar"></div></div>
           <div id="offline-progress-txt" style="font-size:.8rem;color:var(--text-muted);margin-top:6px"></div>
@@ -190,7 +170,11 @@
       <div class="mode-stat-card" style="text-align:left">
         <form id="trade-form">
           <div style="margin-bottom:20px">
-            <label class="mode-stat-label">Etiquetas (Estrategia y Condiciones)</label>
+            <label class="mode-stat-label">Estrategia</label>
+            <div id="form-strategy-picker" class="strategy-picker form-picker"></div>
+          </div>
+          <div style="margin-bottom:20px">
+            <label class="mode-stat-label">Etiquetas</label>
             <input id="t-tags-input" class="form-input" type="text" placeholder="Ej: SMT, FVG, BMS..." />
             <div id="t-tag-cloud" class="tag-cloud"></div>
           </div>
@@ -240,21 +224,41 @@
             <div><label class="mode-stat-label">P&L ($)</label><input class="form-input" type="number" step="0.01" name="pnl" required /></div>
             <div><label class="mode-stat-label">RR Planeado (Opcional)</label><input class="form-input" type="number" step="0.01" name="rrPlanned" /></div>
           </div>
-          <!-- Image Inputs -->
-          <div style="margin-top:20px">
-            <label class="mode-stat-label">Entrada</label>
-            <input class="form-input" type="text" name="tradingViewUrl" placeholder="URL de la imagen de entrada..." />
-          </div>
-          <div class="grid-2-col" style="margin-top:12px">
-            <div>
+          <!-- Image Inputs: cada apartado acepta link, archivo subido o arrastrar y soltar -->
+          <div class="img-slots" style="margin-top:20px">
+            <div class="img-slot" data-slot="tradingView">
+              <label class="mode-stat-label">Entrada</label>
+              <input class="form-input img-url" type="text" name="tradingViewUrl" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" />
+              <div class="img-slot-bar">
+                <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+                <span class="img-file-name"></span>
+                <button type="button" class="img-clear" hidden>Quitar</button>
+              </div>
+              <img class="img-preview" alt="" hidden />
+            </div>
+            <div class="img-slot" data-slot="imageM3">
               <label class="mode-stat-label">M3</label>
-              <input class="form-input" type="text" name="imageM3Url" placeholder="URL M3..." />
+              <input class="form-input img-url" type="text" name="imageM3Url" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" />
+              <div class="img-slot-bar">
+                <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+                <span class="img-file-name"></span>
+                <button type="button" class="img-clear" hidden>Quitar</button>
+              </div>
+              <img class="img-preview" alt="" hidden />
             </div>
-            <div>
+            <div class="img-slot" data-slot="imageM15">
               <label class="mode-stat-label">M15</label>
-              <input class="form-input" type="text" name="imageM15Url" placeholder="URL M15..." />
+              <input class="form-input img-url" type="text" name="imageM15Url" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" />
+              <div class="img-slot-bar">
+                <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+                <span class="img-file-name"></span>
+                <button type="button" class="img-clear" hidden>Quitar</button>
+              </div>
+              <img class="img-preview" alt="" hidden />
             </div>
           </div>
+          <div id="add-extra-images" class="img-slots"></div>
+          <button type="button" id="btn-add-extra-image" class="btn-add-extra">+ Añadir imagen</button>
 
           <!-- Backtest-specific section -->
           <div id="backtest-notes-section" style="display:none;margin-top:20px">
@@ -318,6 +322,8 @@
     <section id="tab-history" class="tab-section">
       <div class="mode-stat-card" style="margin-bottom:24px">
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px,1fr));gap:12px">
+          <select id="filter-strategy" class="form-select" title="Estrategia"><option value="">Todas las estrategias</option></select>
+          <select id="filter-challenge" class="form-select" title="Challenge"><option value="">Todos los challenges</option><option value="none">Sin challenge</option></select>
           <select id="filter-tag" class="form-select"></select>
           <select id="filter-session" class="form-select" title="Sesión">
             <option value="">Todas las sesiones</option>
@@ -337,14 +343,19 @@
           <input id="filter-date-to" type="date" class="form-input" title="Hasta" />
         </div>
       </div>
+      <div id="history-count" class="picker-hint" style="margin-bottom:12px"></div>
       <div id="trade-list"></div>
     </section>
 
     <!-- ANALYTICS -->
     <section id="tab-analytics" class="tab-section">
-      <div class="mode-stat-card">
-        <div class="card-label" style="text-align:left">Filtrar por Etiquetas (Confluencias)</div>
-        <div id="tag-filter-btns" class="tag-cloud"></div>
+      <div class="section-subtitle">Elige una estrategia</div>
+      <div id="analytics-strategy-picker" class="strategy-picker"></div>
+      <div class="mode-stat-card" style="margin-top:16px">
+        <div class="card-label" style="text-align:left">Etiquetas <span id="analytics-tags-scope" class="card-sub"></span></div>
+        <p class="picker-hint">Tocá una o más etiquetas para ver cómo rinde esa combinación. Sin selección, se muestra todo junto.</p>
+        <button type="button" id="analytics-tags-all" class="strategy-filter-btn active">Todas</button>
+        <div id="analytics-tag-rows" style="margin-top:12px"></div>
       </div>
       
       <!-- Metrics Grid -->
@@ -410,6 +421,9 @@
 
     <!-- INSIGHTS -->
     <section id="tab-insights" class="tab-section">
+      <div class="section-subtitle">Elige una estrategia</div>
+      <div id="insights-strategy-picker" class="strategy-picker"></div>
+      <div id="insights-scope-label" class="picker-hint" style="margin:14px 0 4px"></div>
       <div id="insights-content" style="text-align:center;padding:40px">
         <div style="font-size:1.2rem;color:var(--text-muted)">Cargando insights...</div>
       </div>
@@ -422,6 +436,10 @@
   <div class="mode-stat-card" style="max-width:650px;width:100%;text-align:left;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:24px">Editar Trade</h2>
     <form id="edit-form">
+      <div style="margin-bottom:20px">
+        <label class="mode-stat-label">Estrategia</label>
+        <div id="edit-strategy-picker" class="strategy-picker form-picker"></div>
+      </div>
       <div style="margin-bottom:20px">
         <label class="mode-stat-label">Etiquetas</label>
         <input id="edit-tags-input" class="form-input" type="text" name="tags" />
@@ -467,9 +485,40 @@
         <div><label class="mode-stat-label">P&L ($)</label><input class="form-input" type="number" step="0.01" name="pnl" /></div>
         <div><label class="mode-stat-label">RR Planeado</label><input class="form-input" type="number" step="0.01" name="rrPlanned" /></div>
       </div>
-      <div style="margin-top:20px"><label class="mode-stat-label">TradingView URL</label><input class="form-input" type="text" name="tradingViewUrl" /></div>
-      <div style="margin-top:12px"><label class="mode-stat-label">Imagen M3</label><input class="form-input" type="text" name="imageM3Url" /></div>
-      <div style="margin-top:12px"><label class="mode-stat-label">Imagen M15</label><input class="form-input" type="text" name="imageM15Url" /></div>
+      <div class="img-slots" style="margin-top:20px">
+        <div class="img-slot" data-slot="tradingView">
+          <label class="mode-stat-label">Entrada</label>
+          <input class="form-input img-url" type="text" name="tradingViewUrl" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" />
+          <div class="img-slot-bar">
+            <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+            <span class="img-file-name"></span>
+            <button type="button" class="img-clear" hidden>Quitar</button>
+          </div>
+          <img class="img-preview" alt="" hidden />
+        </div>
+        <div class="img-slot" data-slot="imageM3">
+          <label class="mode-stat-label">M3</label>
+          <input class="form-input img-url" type="text" name="imageM3Url" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" />
+          <div class="img-slot-bar">
+            <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+            <span class="img-file-name"></span>
+            <button type="button" class="img-clear" hidden>Quitar</button>
+          </div>
+          <img class="img-preview" alt="" hidden />
+        </div>
+        <div class="img-slot" data-slot="imageM15">
+          <label class="mode-stat-label">M15</label>
+          <input class="form-input img-url" type="text" name="imageM15Url" placeholder="Pegá el link de la imagen, o subila / arrastrala acá" />
+          <div class="img-slot-bar">
+            <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
+            <span class="img-file-name"></span>
+            <button type="button" class="img-clear" hidden>Quitar</button>
+          </div>
+          <img class="img-preview" alt="" hidden />
+        </div>
+      </div>
+      <div id="edit-extra-images" class="img-slots"></div>
+      <button type="button" id="btn-edit-extra-image" class="btn-add-extra">+ Añadir imagen</button>
 
       <!-- Live questions -->
       <div id="edit-live-questions" style="display:none;margin-top:20px">
@@ -535,7 +584,6 @@
 <!-- ── CONFIRM DELETE OVERLAY ──────────────────────────────────────────── -->
 <div id="confirm-overlay" class="modal-overlay">
   <div class="confirm-dialog" style="background:var(--bg-card,#1a1a2e);border:1px solid var(--border,#333);border-radius:12px;padding:32px;max-width:380px;width:90%;text-align:center">
-    <div style="font-size:2rem;margin-bottom:12px">🗑️</div>
     <h3 style="margin:0 0 8px;font-size:1.1rem">¿Eliminar este trade?</h3>
     <p style="margin:0 0 24px;color:var(--text-muted,#888);font-size:.9rem">Esta acción no se puede deshacer.</p>
     <div style="display:flex;gap:12px;justify-content:center">

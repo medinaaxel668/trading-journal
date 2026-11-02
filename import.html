@@ -22,16 +22,20 @@
   <script type="module">
     import { initDB, getDB } from './db.js';
 
-    const APP_STORES = ['trades', 'notes', 'liveTrades', 'liveNotes'];
+    const APP_STORES = ['trades', 'notes', 'liveTrades', 'liveNotes', 'strategies', 'strategyTags'];
     const STORE_MAP = {
       trades: 'trades',
       notes: 'notes',
       liveTrades: 'liveTrades',
       liveNotes: 'liveNotes',
+      strategies: 'strategies',
+      strategyTags: 'strategyTags',
       '$trades': 'trades',
       '$notes': 'notes',
       '$liveTrades': 'liveTrades',
-      '$liveNotes': 'liveNotes'
+      '$liveNotes': 'liveNotes',
+      '$strategies': 'strategies',
+      '$strategyTags': 'strategyTags'
     };
 
     const fileInput = document.getElementById('file-input');
@@ -71,6 +75,29 @@
       };
     }
 
+    // Las imágenes subidas viajan en el backup como { __blob, type, data }
+    // (base64). Se reviven como Blob recién al guardar en IndexedDB.
+    function reviveBlob(marker) {
+      if (!marker || marker.__blob !== true || typeof marker.data !== 'string') return marker;
+      const bin = atob(marker.data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Blob([bytes], { type: marker.type || 'image/png' });
+    }
+
+    function reviveItemBlobs(item) {
+      const out = { ...item };
+      for (const field of ['tradingViewBlob', 'imageM3Blob', 'imageM15Blob']) {
+        if (out[field] && out[field].__blob) out[field] = reviveBlob(out[field]);
+      }
+      if (Array.isArray(out.extraImages)) {
+        out.extraImages = out.extraImages.map(x => (x && x.blob && x.blob.__blob) ? { ...x, blob: reviveBlob(x.blob) } : x);
+      }
+      return out;
+    }
+
+    let pendingBackup = null;
+
     fileInput.addEventListener('change', event => {
       const file = event.target.files[0];
       if (!file) return;
@@ -84,7 +111,7 @@
           const total = APP_STORES.reduce((sum, store) => sum + backup.stores[store].length, 0);
           log(`Archivo listo: ${total} registros.`);
           log(counts);
-          btnImport.dataset.backup = JSON.stringify(backup);
+          pendingBackup = backup;
           btnImport.style.display = 'inline-block';
         } catch (error) {
           log(`Error leyendo el archivo: ${error.message}`, '#f44336');
@@ -95,7 +122,7 @@
     });
 
     btnImport.onclick = async () => {
-      const backup = JSON.parse(btnImport.dataset.backup || '{}');
+      const backup = pendingBackup || { stores: {}, localStorage: {} };
       btnImport.disabled = true;
       btnImport.textContent = 'Importando...';
 
@@ -115,7 +142,7 @@
 
             for (const item of items) {
               const exists = await table.get(item.id);
-              await table.put(item);
+              await table.put(reviveItemBlobs(item));
               if (exists) storeUpdated++;
               else storeInserted++;
             }
