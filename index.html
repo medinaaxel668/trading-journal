@@ -48,34 +48,56 @@
       </div>
     </div>
 
-    <div class="mode-home-grid">
+    <div class="mode-stats-grid">
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">P&L Global</div>
+        <div id="ms-pnl" class="mode-stat-value">---</div>
+      </div>
       <div class="mode-stat-card">
         <div class="mode-stat-label">Win Rate</div>
         <div id="ms-wr" class="mode-stat-value">---</div>
-        <div class="mode-stat-sub">global · excl. BE · <span id="ms-total-count">0</span> trades</div>
+        <div class="mode-stat-sub">excl. BE</div>
       </div>
-      <div class="mode-card-item" onclick="enterMode('backtest')">
-        <div class="mode-preview"><canvas id="preview-bt"></canvas></div>
-        <h3 class="mode-title">Backtesting</h3>
-        <div class="mode-card-stats">Trades <strong id="mc-bt-count">0</strong> | P&amp;L <strong id="mc-bt-pnl">0</strong> | WR <strong id="mc-bt-wr">0</strong> | Mejor racha <strong id="mc-bt-best">0</strong> | Peor racha <strong id="mc-bt-worst">0</strong></div>
-        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Backtesting →</button>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Backtesting</div>
+        <div id="ms-bt-count" class="mode-stat-value">---</div>
+        <div class="mode-stat-sub">trades</div>
       </div>
-      <div class="mode-card-item" onclick="enterMode('live')">
-        <div class="mode-preview"><canvas id="preview-live"></canvas></div>
-        <h3 class="mode-title">Trading en Vivo</h3>
-        <div class="mode-card-stats">Trades <strong id="mc-live-count">0</strong> | P&amp;L <strong id="mc-live-pnl">0</strong> | WR <strong id="mc-live-wr">0</strong> | Mejor racha <strong id="mc-live-best">0</strong> | Peor racha <strong id="mc-live-worst">0</strong></div>
-        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Live →</button>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Live</div>
+        <div id="ms-live-count" class="mode-stat-value">---</div>
+        <div class="mode-stat-sub">trades</div>
       </div>
-      <div class="mode-card-item" onclick="enterMode('challenge')">
-        <div class="mode-preview mode-preview-challenge"><span>Challenge</span></div>
-        <h3 class="mode-title">Challenge</h3>
-        <div class="mode-card-stats">Pruebas <strong id="mc-ch-count">0</strong> | Retiros <strong id="mc-ch-withdrawals">0</strong> | ROI <strong id="mc-ch-roi">0%</strong></div>
-        <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Challenge →</button>
+      <div class="mode-stat-card">
+        <div class="mode-stat-label">Challenge</div>
+        <div id="ms-ch-count" class="mode-stat-value">---</div>
+       <div class="mode-stat-sub">pruebas</div>
       </div>
     </div>
 
-    <div class="mode-section-title">Estrategias</div>
-    <div id="mode-strategies" class="mode-strategies-grid"></div>
+      <div class="modes-grid">
+        <div class="mode-card-item" onclick="enterMode('backtest')">
+          <div class="mode-preview"><canvas id="preview-bt"></canvas></div>
+          <h3 class="mode-title">Backtesting</h3>
+          <p class="mode-desc">Analizá trades históricos y perfeccioná tu estrategia.</p>
+          <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-bt-count">0</span> | P&L: <span id="mc-bt-pnl">0</span> | WR: <span id="mc-bt-wr">0</span></div>
+          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Backtesting →</button>
+        </div>
+        <div class="mode-card-item" onclick="enterMode('live')">
+          <div class="mode-preview"><canvas id="preview-live"></canvas></div>
+          <h3 class="mode-title">Trading en Vivo</h3>
+          <p class="mode-desc">Registrá tus sesiones reales y analizá tu psicología.</p>
+          <div class="mode-stat-label" style="margin-top: 10px;">Trades: <span id="mc-live-count">0</span> | P&L: <span id="mc-live-pnl">0</span> | WR: <span id="mc-live-wr">0</span></div>
+          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Live →</button>
+        </div>
+          <div class="mode-card-item" onclick="enterMode('challenge')">
+          <div class="mode-preview mode-preview-challenge"><span>Challenge</span></div>
+          <h3 class="mode-title">Challenge</h3>
+          <p class="mode-desc">Exámenes de fondeo, conversión a retiros, ROI y comparativa simulado vs real.</p>
+          <div class="mode-stat-label" style="margin-top: 10px;">Pruebas: <span id="mc-ch-count">0</span> | Retiros: <span id="mc-ch-withdrawals">0</span> | ROI: <span id="mc-ch-roi">0%</span></div>
+          <button class="btn-enter-mode" style="margin-top: 15px;">Ir a Challenge →</button>
+        </div>
+      </div>
 
       <details id="data-diagnostic-panel" class="diagnostic-panel">
         <summary class="diagnostic-summary">

@@ -7,7 +7,7 @@ import {
   getAllNotes, addNote, deleteNote,
   getAllLiveNotes, addLiveNote, deleteLiveNote,
   getAllStrategies, addStrategy as dbAddStrategy, getAllStrategyTags,
-  addStrategyTag, renameStrategyTag, deleteStrategyTag, ensureTradeStrategies
+  addStrategyTag, renameStrategyTag, deleteStrategyTag
 } from './db.js';
 import { enterChallengeMode, restoreOriginalTabs } from './challenge-ui.js';
 import { getAllChallenges, computeChallengeMetrics } from './challenge.js';
@@ -72,9 +72,6 @@ export async function boot() {
   checkSession();
   initTheme();
   await migrateTradesToTags();
-  // Red de seguridad del rediseño: trades sin estrategia (p. ej. cargados
-  // desde otro dispositivo con la versión vieja) reciben la suya acá.
-  await ensureTradeStrategies().catch(e => console.warn('[boot] ensureTradeStrategies:', e.message));
   await loadStrategies();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -365,24 +362,21 @@ function renderModeStats() {
   const mBt   = computeMetrics(bt);
   const mLive = computeMetrics(live);
   const mAll  = computeMetrics(all);
+  setEl('ms-pnl',       fmtPnl(mAll.totalPnl), colorClass(mAll.totalPnl));
   setEl('ms-wr',        mAll.winRate!==null?fmtPct(mAll.winRate):'N/A', mAll.winRate!==null?colorClass(mAll.winRate-.5):'neutral');
-  setEl('ms-total-count', all.length);
+  setEl('ms-bt-count',  bt.length);
+  setEl('ms-live-count',live.length);
   setEl('ms-bt-notes-count', btNotes.length);
   setEl('ms-live-notes-count', liveNotes.length);
   setEl('ms-total-notes-count', btNotes.length + liveNotes.length);
   setEl('ms-data-source', `${db && db.cloud ? 'Cloud activo' : 'Solo local'} · actualizado ${state.lastModeLoadAt ? fmtDateTime(state.lastModeLoadAt) : 'ahora'}`);
-  setText('mc-bt-count',  bt.length);
-  setText('mc-bt-wr',     mBt.winRate!==null?fmtPct(mBt.winRate):'N/A');
-  setText('mc-bt-pnl',    fmtPnl(mBt.totalPnl), colorClass(mBt.totalPnl));
-  setText('mc-bt-best',   mBt.bestStreak);
-  setText('mc-bt-worst',  mBt.worstStreak);
-  setText('mc-live-count',live.length);
-  setText('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
-  setText('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
-  setText('mc-live-best', mLive.bestStreak);
-  setText('mc-live-worst',mLive.worstStreak);
+  setEl('mc-bt-count',  bt.length);
+  setEl('mc-bt-wr',     mBt.winRate!==null?fmtPct(mBt.winRate):'N/A');
+  setEl('mc-bt-pnl',    fmtPnl(mBt.totalPnl), colorClass(mBt.totalPnl));
+  setEl('mc-live-count',live.length);
+  setEl('mc-live-wr',   mLive.winRate!==null?fmtPct(mLive.winRate):'N/A');
+  setEl('mc-live-pnl',  fmtPnl(mLive.totalPnl), colorClass(mLive.totalPnl));
   renderModePreviews(bt, live);
-  renderModeStrategies(all);
   // Challenge stats
  import('./challenge.js').then(m => m.getAllChallenges()).then(challenges => {
   const m = computeChallengeMetrics(challenges);
@@ -414,22 +408,6 @@ function renderModeStats() {
       });
     } catch(e){}
   }
-}
-
-function renderModeStrategies(allTrades) {
-  const wrap = document.getElementById('mode-strategies');
-  if (!wrap) return;
-  if (!state.strategies.length) {
-    wrap.innerHTML = '<div class="picker-empty">Todavía no hay estrategias.</div>';
-    return;
-  }
-  wrap.innerHTML = state.strategies.map(s => {
-    const st = strategyStatsLine(allTrades.filter(t => t.strategyId === s.id));
-    return `<div class="mode-strategy-card">
-      <div class="mode-strategy-name">${esc(s.name)}</div>
-      <div class="mode-strategy-stats"><span>Trades <strong>${st.count}</strong></span><span>WR <strong>${st.wr !== null ? fmtPct(st.wr) : 'N/A'}</strong></span><span>P&L <strong>${fmtPnl(st.pnl)}</strong></span><span>EV <strong>${st.ev !== null ? fmtPnl(st.ev) : 'N/A'}</strong></span></div>
-    </div>`;
-  }).join('');
 }
 
 function renderModePreviews(btTrades, liveTrades) {
@@ -525,27 +503,28 @@ function renderTagCloud(containerId, inputId) {
   const strategyId = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
   const getCurrentTags = () => input.value.split(',').map(s => s.trim().toUpperCase()).filter(s => s !== '');
 
-  // Las etiquetas son POR estrategia: sin estrategia elegida no hay lista.
-  if (!strategyId) {
-    container.innerHTML = '<div class="picker-empty">Primero elegí una estrategia: cada estrategia tiene su propia lista de etiquetas.</div>';
-    return;
-  }
-
-  const active = activeTagNames(strategyId);
+  // Sin estrategia elegida: se muestran las etiquetas usadas en este modo
+  // (como antes del rediseño), solo para tildar. La gestión por estrategia
+  // (lista propia, menú •••, amarillas) aparece al elegir una estrategia.
+  const noStrategy = !strategyId;
   const current = getCurrentTags();
+  const active = noStrategy
+    ? [...new Set([...current, ...state.trades.flatMap(t => (t.tags || []).map(x => String(x).toUpperCase()))])].sort()
+    : activeTagNames(strategyId);
   // Etiquetas que el trade ya tiene pero ya no están en la lista activa de la
   // estrategia (eliminadas): se muestran en amarillo, "a revisar".
-  const orphan = current.filter(t => !active.some(a => a.toUpperCase() === t));
+  const orphan = noStrategy ? [] : current.filter(t => !active.some(a => a.toUpperCase() === t));
 
   const chipHTML = (tag, isOrphan) => {
     const isActive = current.includes(tag.toUpperCase());
     return `<span class="tag-chip-wrap">
       <button type="button" class="tag-chip ${isActive ? 'active' : ''} ${isOrphan ? 'tag-orphan' : ''}" data-tag="${esc(tag)}"${isOrphan ? ' title="Etiqueta fuera de la lista de la estrategia — a revisar"' : ''}>${esc(tag)}</button>
-      <button type="button" class="tag-chip-menu" data-tag="${esc(tag)}" title="Editar o eliminar etiqueta" aria-label="Opciones de la etiqueta ${esc(tag)}">•••</button>
+      ${noStrategy ? '' : `<button type="button" class="tag-chip-menu" data-tag="${esc(tag)}" title="Editar o eliminar etiqueta" aria-label="Opciones de la etiqueta ${esc(tag)}">•••</button>`}
     </span>`;
   };
 
-  let html = active.map(tag => chipHTML(tag, false)).join('')
+  let html = (noStrategy ? '<div class="picker-hint" style="width:100%">Sin estrategia elegida: se ven las etiquetas de siempre. Si elegís una estrategia, la lista pasa a ser solo la de esa estrategia.</div>' : '')
+    + active.map(tag => chipHTML(tag, false)).join('')
     + orphan.map(tag => chipHTML(tag, true)).join('');
 
   // Control integrado para añadir etiquetas a la lista de la estrategia
@@ -587,6 +566,13 @@ function renderTagCloud(containerId, inputId) {
   const addTag = async () => {
     const cleanTag = (addInput?.value || '').trim().toUpperCase();
     if (!cleanTag) return;
+    if (noStrategy) {
+      // Sin estrategia: la etiqueta solo se tilda en este trade.
+      const cur = getCurrentTags();
+      if (!cur.includes(cleanTag)) input.value = [...cur, cleanTag].join(', ');
+      renderTagCloud(containerId, inputId);
+      return;
+    }
     await addStrategyTag(strategyId, cleanTag);
     await loadStrategies();
     const cur = getCurrentTags();
@@ -709,8 +695,10 @@ function strategyById(id) {
 }
 
 function strategyNameOf(t) {
+  // Solo cuenta la estrategia REAL asignada (strategyId). El strategyName
+  // histórico de los trades viejos era un tag, no una estrategia.
   const s = t && t.strategyId ? strategyById(t.strategyId) : null;
-  return s ? s.name : ((t && t.strategyName) || '');
+  return s ? s.name : '';
 }
 
 // Nombres de etiquetas ACTIVAS de una estrategia (las que ofrece el formulario).
@@ -775,8 +763,12 @@ function renderFormStrategyPicker(containerId, kind) {
     `<button type="button" class="strategy-card ${selectedId === s.id ? 'selected' : ''}" data-strategy="${s.id}"><span class="strategy-card-name">${esc(s.name)}<span class="strategy-card-check">✓</span></span></button>`
   ).join('') + `<span class="strategy-new-card"><button type="button" class="strategy-new-btn">+ Nueva estrategia</button><span class="strategy-new-form" hidden><input type="text" class="form-input strategy-new-input" placeholder="Nombre de la estrategia" /><button type="button" class="strategy-new-submit">Crear</button></span></span>`;
   el.querySelectorAll('[data-strategy]').forEach(btn => btn.addEventListener('click', () => {
-    if (kind === 'edit') state.editStrategyId = btn.dataset.strategy;
-    else state.formStrategyId = btn.dataset.strategy;
+    // Tocar la estrategia ya elegida la deselecciona (trade sin estrategia).
+    const clicked = btn.dataset.strategy;
+    const current = kind === 'edit' ? state.editStrategyId : state.formStrategyId;
+    const next = current === clicked ? '' : clicked;
+    if (kind === 'edit') state.editStrategyId = next;
+    else state.formStrategyId = next;
     renderFormStrategyPicker(containerId, kind);
     renderTagCloud(cloudId, inputId);
   }));
@@ -1297,12 +1289,11 @@ function collectTradeForm(formId) {
   }
 
   const smtVal = r('smt');
-  // Rediseño: la estrategia sale del selector de rectángulos (ya no del primer
-  // tag). Sin estrategia elegida no se puede guardar.
+  // La estrategia sale del selector de rectángulos. Es OPCIONAL: un trade
+  // puede guardarse sin estrategia (los viejos no tienen ninguna asignada).
   const isEdit = formId !== 'trade-form';
-  const strategyId = isEdit ? state.editStrategyId : state.formStrategyId;
-  if (!strategyId) throw new Error('Elegí una estrategia para el trade');
-  const strat = strategyById(strategyId);
+  const strategyId = (isEdit ? state.editStrategyId : state.formStrategyId) || null;
+  const strat = strategyId ? strategyById(strategyId) : null;
   const imgState = isEdit ? state.editFormImages : state.formImages;
   return {
     strategyId,
@@ -1638,11 +1629,12 @@ function renderAnalyticsTagRows(scopedTrades) {
   } else {
     const set = new Set();
     state.strategyTags.filter(x => !x.deleted).forEach(x => set.add(x.name));
+    scopedTrades.forEach(t => (t.tags || []).forEach(x => set.add(String(x).toUpperCase())));
     tagNames = [...set];
   }
   tagNames = [...tagNames].sort((a, b) => a.localeCompare(b));
   if (!tagNames.length) {
-    wrap.innerHTML = '<div class="picker-empty">Esta estrategia todavía no tiene etiquetas.</div>';
+    wrap.innerHTML = '<div class="picker-empty">Todavía no hay etiquetas para mostrar.</div>';
     return;
   }
   wrap.innerHTML = tagNames.map(tag => {

@@ -76,50 +76,34 @@ export async function initDB() {
     challenges: 'id,type,firma,status,createdAt,fechaInicioExamen',
     strategies: 'id,name,createdAt',
     strategyTags: 'id,strategyId,name,deleted,createdAt'
+  });
+
+
+  // ── Schema v7 (corrección 2026-11-02): las "estrategias" NO salen de los tags ──
+  // La migración v6 creaba estrategias desde el strategyName histórico, que en
+  // realidad era el primer TAG del trade. El usuario no tiene estrategias
+  // cargadas: las crea él a mano ("+ Nueva estrategia"). Esta versión borra
+  // las estrategias y el registro de etiquetas creados automáticamente y deja
+  // todos los trades SIN estrategia (strategyId null, strategyName '').
+  // Ningún trade se borra ni pierde sus etiquetas.
+  db.version(7).stores({
+    trades:     'id,date,strategyName,strategyId,symbol,killZone,side,result,smt,tags,createdAt,[date+strategyName],challengeId',
+    notes:      'id,date,createdAt',
+    liveTrades: 'id,date,strategyName,strategyId,symbol,killZone,side,result,smt,tags,createdAt,challengeId',
+    liveNotes:  'id,date,createdAt',
+    challenges: 'id,type,firma,status,createdAt,fechaInicioExamen',
+    strategies: 'id,name,createdAt',
+    strategyTags: 'id,strategyId,name,deleted,createdAt'
   }).upgrade(async tx => {
-    // Migración NO destructiva: ningún trade se borra ni pierde campos.
-    // Cada trade recibe la estrategia que hoy muestra la app (strategyName o,
-    // en su defecto, su primer tag) y sus etiquetas quedan registradas en la
-    // lista de esa estrategia.
-    const stratByKey = new Map(); // nombre en minúsculas -> registro
-    const tagKeys = new Set();    // strategyId + '|' + nombre en minúsculas
-
-    async function findOrCreateStrategy(name) {
-      const key = name.toLowerCase();
-      if (stratByKey.has(key)) return stratByKey.get(key);
-      const existing = await tx.table('strategies').where('name').equals(name).first()
-        || (await tx.table('strategies').toArray()).find(s => (s.name || '').trim().toLowerCase() === key);
-      if (existing) { stratByKey.set(key, existing); return existing; }
-      const strat = { id: uuid(), name, createdAt: nowISO(), updatedAt: nowISO() };
-      await tx.table('strategies').add(strat);
-      stratByKey.set(key, strat);
-      return strat;
-    }
-
-    async function registerTag(strategyId, name) {
-      const key = strategyId + '|' + name.toLowerCase();
-      if (tagKeys.has(key)) return;
-      tagKeys.add(key);
-      const all = await tx.table('strategyTags').where('strategyId').equals(strategyId).toArray();
-      if (all.some(t => (t.name || '').trim().toLowerCase() === name.toLowerCase())) return;
-      await tx.table('strategyTags').add({
-        id: uuid(), strategyId, name, deleted: 0, createdAt: nowISO(), updatedAt: nowISO()
-      });
-    }
-
+    await tx.table('strategies').clear();
+    await tx.table('strategyTags').clear();
     for (const tableName of ['trades', 'liveTrades']) {
       const table = tx.table(tableName);
       const all = await table.toArray();
       for (const t of all) {
-        const rawName = String(t.strategyName || (Array.isArray(t.tags) && t.tags[0]) || '').trim();
-        if (!rawName) continue; // sin estrategia identificable: queda como está
-        const strat = await findOrCreateStrategy(rawName);
-        const tags = Array.isArray(t.tags) ? t.tags : [];
-        for (const tag of tags) {
-          const tn = String(tag || '').trim();
-          if (tn) await registerTag(strat.id, tn);
+        if (t.strategyId || t.strategyName) {
+          await table.update(t.id, { strategyId: null, strategyName: '' });
         }
-        await table.update(t.id, { strategyId: strat.id, strategyName: strat.name });
       }
     }
   });
@@ -385,35 +369,4 @@ export async function deleteStrategyTag(strategyId, name) {
   const all = await db.strategyTags.where('strategyId').equals(strategyId).toArray();
   const rec = all.find(t => (t.name || '').trim().toLowerCase() === clean.toLowerCase());
   if (rec) await db.strategyTags.update(rec.id, { deleted: 1, updatedAt: nowISO() });
-}
-
-// Red de seguridad post-migración: si llegan trades sin strategyId (por
-// ejemplo, cargados desde otro dispositivo con la versión vieja de la app y
-// sincronizados por Dexie Cloud), les asigna la estrategia según su
-// strategyName/primer tag, con la misma lógica de la migración v6.
-export async function ensureTradeStrategies() {
-  const strategies = await db.strategies.toArray();
-  const byKey = new Map(strategies.map(s => [(s.name || '').trim().toLowerCase(), s]));
-  async function findOrCreate(name) {
-    const key = name.toLowerCase();
-    if (byKey.has(key)) return byKey.get(key);
-    const strat = await addStrategy(name);
-    byKey.set(key, strat);
-    return strat;
-  }
-  for (const table of [db.trades, db.liveTrades]) {
-    const rows = await table.toArray();
-    for (const t of rows) {
-      if (t.strategyId) continue;
-      const rawName = String(t.strategyName || (Array.isArray(t.tags) && t.tags[0]) || '').trim();
-      if (!rawName) continue;
-      const strat = await findOrCreate(rawName);
-      await table.update(t.id, { strategyId: strat.id, strategyName: strat.name });
-      const tags = Array.isArray(t.tags) ? t.tags : [];
-      for (const tag of tags) {
-        const tn = String(tag || '').trim();
-        if (tn) await addStrategyTag(strat.id, tn);
-      }
-    }
-  }
 }
