@@ -1270,8 +1270,13 @@ function newImageState() {
 function slotRefresh(slotEl, entry) {
   const nameEl = slotEl.querySelector('.img-file-name');
   const clearBtn = slotEl.querySelector('.img-clear');
+  const openBtn = slotEl.querySelector('.img-open');
+  const urlInput = slotEl.querySelector('.img-url');
   const preview = slotEl.querySelector('.img-preview');
   if (!nameEl || !preview) return;
+  // El botón Abrir aparece si el apartado tiene algo para ver: un archivo
+  // subido o un link en el campo.
+  if (openBtn) openBtn.hidden = !((entry && entry.blob) || (urlInput && urlInput.value.trim()));
   if (entry && entry.blob) {
     nameEl.textContent = entry.name || 'imagen subida';
     if (clearBtn) clearBtn.hidden = false;
@@ -1289,10 +1294,20 @@ function wireSlot(slotEl, getEntry, setEntry) {
   const fileInput = slotEl.querySelector('.img-file');
   const urlInput = slotEl.querySelector('.img-url');
   const clearBtn = slotEl.querySelector('.img-clear');
+  const openBtn = slotEl.querySelector('.img-open');
   if (fileInput) fileInput.addEventListener('change', () => {
     const f = fileInput.files && fileInput.files[0];
     if (f) { setEntry({ blob: f, name: f.name }); slotRefresh(slotEl, getEntry()); }
     fileInput.value = '';
+  });
+  if (urlInput) urlInput.addEventListener('input', () => slotRefresh(slotEl, getEntry()));
+  if (openBtn) openBtn.addEventListener('click', () => {
+    // Ver la imagen en el navegador: el archivo subido como pestaña con la
+    // imagen, o el link tal cual está pegado (FXReplay, TradingView, etc.).
+    const entry = getEntry();
+    if (entry && entry.blob) { window.open(URL.createObjectURL(entry.blob), '_blank'); return; }
+    const u = urlInput ? urlInput.value.trim() : '';
+    if (u) window.open(u, '_blank', 'noopener');
   });
   if (clearBtn) clearBtn.addEventListener('click', () => {
     setEntry({ blob: null, name: '' });
@@ -1333,6 +1348,7 @@ function createImageBinder(form, getState, extrasEl, addBtn) {
         <div class="img-slot-bar">
           <label class="btn-upload">Subir<input type="file" accept="image/*" class="img-file" hidden /></label>
           <span class="img-file-name"></span>
+          <button type="button" class="img-open" hidden>Abrir</button>
           <button type="button" class="img-clear" hidden>Quitar</button>
         </div>
         <img class="img-preview" alt="" hidden />
@@ -2735,13 +2751,42 @@ function ensureLightbox() {
   document.body.appendChild(lb);
   lb.querySelectorAll('[data-lb-close]').forEach(el => el.addEventListener('click', closeImageLightbox));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeImageLightbox(); });
+  // Si la imagen no carga (snapshot borrado, link caído), en vez de mostrar
+  // el visor roto se abre el original en el navegador.
+  const imgEl = lb.querySelector('#img-lightbox-img');
+  imgEl.addEventListener('error', () => {
+    const orig = document.getElementById('img-lightbox-orig');
+    const href = orig && orig.style.display !== 'none' ? orig.getAttribute('href') : '';
+    imgEl.removeAttribute('src');
+    closeImageLightbox();
+    if (href && href !== '#') window.open(href, '_blank', 'noopener');
+  });
   return lb;
 }
 
+// ¿La URL es una IMAGEN directa (mostrable en el visor) o el link de una
+// PÁGINA? Los links de FXReplay y similares son páginas: en el visor se ven
+// rotos; esos se abren en una pestaña del navegador, como antes. Los de
+// TradingView /x/ cuentan como imagen porque resolveImageUrl los pasa al
+// PNG del snapshot.
+function isDirectImageUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return false;
+  if (/^data:image\//i.test(u) || /^blob:/i.test(u)) return true;
+  if (/tradingview\.com\/x\//i.test(u)) return true;
+  return /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(u.split(/[?#]/)[0]);
+}
+
 function openImageLightbox(rawUrl, label) {
-  const resolved = resolveImageUrl(rawUrl);
+  const u = String(rawUrl || '').trim();
+  if (!u) return;
+  if (!isDirectImageUrl(u)) {
+    window.open(u, '_blank', 'noopener');
+    return;
+  }
+  const resolved = resolveImageUrl(u);
   if (!resolved) return;
-  openImageLightboxSrc(resolved, label, rawUrl);
+  openImageLightboxSrc(resolved, label, u);
 }
 
 // Abre el visor con una fuente ya resuelta (URL directa u object URL de un
