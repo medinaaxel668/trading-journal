@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-journal-v12';
+const CACHE_NAME = 'trading-journal-v13';
 // Caché dedicada para imágenes de trades (modo viaje offline).
 // Va separada del app shell para que NO se borre cuando se actualiza la app.
 const IMG_CACHE = 'trading-journal-images-v1';

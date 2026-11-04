@@ -611,14 +611,14 @@ body.light-mode .daywr-bar-wrap { background: rgba(0,0,0,0.05); }
 .img-lightbox.open { display: flex; }
 .img-lightbox-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.88); }
 .img-lightbox-content {
-  position: relative; max-width: 94vw; max-height: 92vh; background: #141414;
+  position: relative; width: min(96vw, 1500px); max-height: 94vh; background: #141414;
   border: 1px solid var(--border); border-radius: 12px; padding: 12px;
   display: flex; flex-direction: column;
 }
 .img-lightbox-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--text); font-weight: 600; }
 .img-lightbox-close { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
 .img-lightbox-close:hover { color: var(--text); }
-.img-lightbox img { max-width: 100%; max-height: 74vh; object-fit: contain; border-radius: 8px; background: #000; }
+.img-lightbox img { width: 100%; height: auto; max-height: 80vh; object-fit: contain; border-radius: 8px; background: #000; }
 .img-lightbox-foot { margin-top: 8px; text-align: right; }
 .img-lightbox-foot a { color: var(--text-muted); font-size: .8rem; text-decoration: none; }
 .img-lightbox-foot a:hover { text-decoration: underline; }
