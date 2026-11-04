@@ -1256,6 +1256,25 @@ function collectSmartField(formId, fieldName, selectId, newInputId, storageKey) 
 // archivo subido O arrastrar y soltar. Los archivos viajan como Blob dentro
 // del registro del trade (IndexedDB; con Dexie Cloud sincronizan entre
 // dispositivos y ya quedan disponibles sin internet, sin preparar el viaje).
+// Busca un trade por id tolerando el tipo: los ids que vienen de dataset
+// siempre son string, pero un trade guardado puede traer el id numérico.
+function findTradeById(list, id) {
+  return (list || []).find(x => String(x.id) === String(id)) || null;
+}
+
+// URL de objeto SEGURA para un valor guardado como imagen subida: si el
+// valor no es un Blob de verdad (pudo volver de la nube o de un guardado
+// viejo con otra forma), devuelve '' en vez de explotar — un archivo en mal
+// estado no tiene que romper ni el visor ni el botón Editar.
+function safeObjectUrl(v) {
+  try {
+    if (v instanceof Blob) return URL.createObjectURL(v);
+    if (v instanceof ArrayBuffer) return URL.createObjectURL(new Blob([v]));
+    if (ArrayBuffer.isView(v)) return URL.createObjectURL(new Blob([v.buffer]));
+  } catch (e) { /* el llamador decide el plan B */ }
+  return '';
+}
+
 function newImageState() {
   return {
     slots: {
@@ -1280,8 +1299,9 @@ function slotRefresh(slotEl, entry) {
   if (entry && entry.blob) {
     nameEl.textContent = entry.name || 'imagen subida';
     if (clearBtn) clearBtn.hidden = false;
-    preview.src = URL.createObjectURL(entry.blob);
-    preview.hidden = false;
+    const u = safeObjectUrl(entry.blob);
+    if (u) { preview.src = u; preview.hidden = false; }
+    else { preview.hidden = true; preview.removeAttribute('src'); }
   } else {
     nameEl.textContent = '';
     if (clearBtn) clearBtn.hidden = true;
@@ -1305,9 +1325,13 @@ function wireSlot(slotEl, getEntry, setEntry) {
     // Ver la imagen en el navegador: el archivo subido como pestaña con la
     // imagen, o el link tal cual está pegado (FXReplay, TradingView, etc.).
     const entry = getEntry();
-    if (entry && entry.blob) { window.open(URL.createObjectURL(entry.blob), '_blank'); return; }
+    if (entry && entry.blob) {
+      const u = safeObjectUrl(entry.blob);
+      if (u) { window.open(u, '_blank'); return; }
+    }
     const u = urlInput ? urlInput.value.trim() : '';
-    if (u) window.open(u, '_blank', 'noopener');
+    if (u) { window.open(u, '_blank', 'noopener'); return; }
+    if (entry && entry.blob) showToast('La imagen guardada no se pudo abrir; probá quitándola y subiéndola de nuevo', 'error');
   });
   if (clearBtn) clearBtn.addEventListener('click', () => {
     setEntry({ blob: null, name: '' });
@@ -1613,7 +1637,7 @@ function bindDetailModal() {
 }
 
 function openDetailModal(id) {
-  const t=state.trades.find(x=>x.id===id); if(!t)return;
+  const t=findTradeById(state.trades, id); if(!t)return;
   const chName = t.challengeId ? challengeNameById[String(t.challengeId)] : null;
   const chRow = chName
     ? `<div class="detail-row"><span class="detail-row-label">Challenge</span><span class="detail-row-value">${esc(chName)}</span></div>`
@@ -1687,8 +1711,8 @@ function bindEditModal() {
 }
 
 function openEditModal(id) {
-  const t=state.trades.find(x=>x.id===id); if(!t)return;
-  state.editingTradeId=id;
+  const t=findTradeById(state.trades, id); if(!t)return;
+  state.editingTradeId=t.id;
   const f=document.getElementById('edit-form');
   // Estrategia del trade: por ID; si es un trade viejo que solo trae el
   // nombre, se busca la estrategia equivalente.
@@ -1762,11 +1786,13 @@ function closeEditModal() { document.getElementById('edit-modal').classList.remo
 
 // ── CONFIRM DELETE ────────────────────────────────────────────────────────────
 function confirmDelete(id) {
+  const found = findTradeById(state.trades, id);
+  const realId = found ? found.id : id;
   const overlay=document.getElementById('confirm-overlay');
   overlay.classList.add('open');
   document.getElementById('confirm-yes').onclick=async()=>{
-    if(state.mode==='live') await deleteLiveTrade(id);
-    else await deleteTrade(id);
+    if(state.mode==='live') await deleteLiveTrade(realId);
+    else await deleteTrade(realId);
     overlay.classList.remove('open');
     showToast('Trade eliminado','success');
     await loadData(); renderAll();
@@ -2815,18 +2841,21 @@ function bindImageLightboxButtons(root) {
     btn.addEventListener('click', () => {
       // Imagen subida como archivo: el Blob vive en el registro del trade.
       if (btn.dataset.blobField || btn.dataset.extraId) {
-        const t = state.trades.find(x => x.id === btn.dataset.trade)
-          || (state.allBtTrades || []).find(x => x.id === btn.dataset.trade)
-          || (state.allLiveTrades || []).find(x => x.id === btn.dataset.trade);
+        const t = findTradeById(state.trades, btn.dataset.trade)
+          || findTradeById(state.allBtTrades, btn.dataset.trade)
+          || findTradeById(state.allLiveTrades, btn.dataset.trade);
         if (!t) return;
         let blob = null, orig = '';
         if (btn.dataset.blobField) {
           blob = t[btn.dataset.blobField];
         } else {
-          const x = (t.extraImages || []).find(e => e.id === btn.dataset.extraId);
+          const x = (t.extraImages || []).find(e => String(e.id) === String(btn.dataset.extraId));
           if (x) { blob = x.blob; orig = x.url || ''; }
         }
-        if (blob) openImageLightboxSrc(URL.createObjectURL(blob), btn.dataset.label, orig);
+        const u = blob ? safeObjectUrl(blob) : '';
+        if (u) openImageLightboxSrc(u, btn.dataset.label, orig);
+        else if (orig) openImageLightbox(orig, btn.dataset.label);
+        else if (blob) showToast('La imagen guardada no se pudo abrir', 'error');
         return;
       }
       openImageLightbox(btn.dataset.raw, btn.dataset.label);
